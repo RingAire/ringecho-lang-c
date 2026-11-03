@@ -6,6 +6,15 @@ RingEcho 編譯器工具鏈的零依賴 C 實作。
 
 [English](README.md) | [简体中文](README.zh.md) | 繁體中文
 
+<p align="center">
+  <a href="https://github.com/RingAire/ringecho-lang-c/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/RingAire/ringecho-lang-c/ci.yml?branch=main&label=ci&style=flat-square" alt="CI 狀態"></a>
+  <a href="https://github.com/RingAire/ringecho-lang-c/releases"><img src="https://img.shields.io/github/v/release/RingAire/ringecho-lang-c?label=release&style=flat-square" alt="最新版本"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-1A73E8?style=flat-square" alt="Apache-2.0 授權"></a>
+  <img src="https://img.shields.io/badge/language-C-555555?logo=c&logoColor=white&style=flat-square" alt="C">
+  <img src="https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-4B5563?style=flat-square" alt="Windows、macOS 與 Linux">
+  <a href="https://github.com/RingAire/ringecho-lang-c/stargazers"><img src="https://img.shields.io/github/stars/RingAire/ringecho-lang-c?label=stars&style=flat-square" alt="GitHub Star 數"></a>
+</p>
+
 ## 狀態
 
 | 項目 | 值 |
@@ -125,3 +134,13 @@ make test-list                       # 列出全部測試
 ## 授權
 
 [Apache-2.0](LICENSE) - Copyright (c) 2025-2026 輝夜鈴 (KaguyaRing) & Ringaire
+
+## Star 趨勢
+
+<a href="https://www.star-history.com/#RingAire/ringecho-lang-c&amp;Date">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=RingAire/ringecho-lang-c&amp;type=Date&amp;theme=dark" />
+    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=RingAire/ringecho-lang-c&amp;type=Date" />
+    <img src="https://api.star-history.com/svg?repos=RingAire/ringecho-lang-c&amp;type=Date" alt="Star 趨勢圖" />
+  </picture>
+</a>
