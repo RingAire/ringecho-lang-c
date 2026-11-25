@@ -103,7 +103,7 @@ struct Re0Stmt {
     Re0StmtKind kind; Re0Span span;
     /* Definition-owned metadata; strings belong to the compiler arena. */
     struct { const char *section; const char *export_name;
-             unsigned align; bool used, weak, no_mangle, noreturn, naked; } declaration;
+             unsigned align; bool used, weak, no_mangle, noreturn, naked, interrupt; } declaration;
     union {
         struct { Re0Expr *expr; } expr_stmt;
         struct { char *name; char *type; Re0Expr *init; } let_stmt;

@@ -526,6 +526,26 @@ static int c_gen_expr_impl(Re0Codegen *c, Re0Expr *e) {
                 if (strcmp(fn, "path_ext") == 0)  { re0_buffer_write_str(b, "__reo_path_ext((char*)"); goto gen1; }
                 if (strcmp(fn, "path_base") == 0) { re0_buffer_write_str(b, "__reo_path_base((char*)"); goto gen1; }
                 if (strcmp(fn, "path_isdir") == 0){ re0_buffer_write_str(b, "__reo_path_isdir((char*)"); goto gen1; }
+                /* x86 port I/O and privileged instructions */
+                if (strcmp(fn, "inb") == 0) { re0_buffer_write_str(b, "__reo_inb((uint16_t)"); goto gen1; }
+                if (strcmp(fn, "inw") == 0) { re0_buffer_write_str(b, "__reo_inw((uint16_t)"); goto gen1; }
+                if (strcmp(fn, "inl") == 0) { re0_buffer_write_str(b, "__reo_inl((uint16_t)"); goto gen1; }
+                if (strcmp(fn, "outb") == 0 || strcmp(fn, "outw") == 0 || strcmp(fn, "outl") == 0) {
+                    re0_buffer_write_str(b, strcmp(fn, "outb") == 0 ? "__reo_outb((uint16_t)" :
+                                              strcmp(fn, "outw") == 0 ? "__reo_outw((uint16_t)" :
+                                                                         "__reo_outl((uint16_t)");
+                    if (e->call.arg_count > 0) c_gen_expr(c, e->call.args[0]); else re0_buffer_write_str(b, "0");
+                    re0_buffer_write_str(b, strcmp(fn, "outb") == 0 ? ", (uint8_t)" :
+                                              strcmp(fn, "outw") == 0 ? ", (uint16_t)" :
+                                                                         ", (uint32_t)");
+                    if (e->call.arg_count > 1) c_gen_expr(c, e->call.args[1]); else re0_buffer_write_str(b, "0");
+                    re0_buffer_write_char(b, ')');
+                    break;
+                }
+                if (strcmp(fn, "cli") == 0) { re0_buffer_write_str(b, "__reo_cli()"); break; }
+                if (strcmp(fn, "sti") == 0) { re0_buffer_write_str(b, "__reo_sti()"); break; }
+                if (strcmp(fn, "hlt") == 0) { re0_buffer_write_str(b, "__reo_hlt()"); break; }
+                if (strcmp(fn, "halt_forever") == 0) { re0_buffer_write_str(b, "__reo_halt_forever()"); break; }
                 /* proc builtin */
                 if (strcmp(fn, "proc_run") == 0)  { re0_buffer_write_str(b, "__reo_proc_run((char*)"); goto gen1; }
                 goto generic_call;

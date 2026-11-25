@@ -18,6 +18,30 @@ void re0_runtime_c_emit(Re0Buffer *out) {
          * disabled. Preserve the exact CRT type, not a guessed integer width. */
         "#ifdef __MINGW32__\n#include <sys/types.h>\ntypedef _pid_t pid_t;\n#endif\n"
         "#include <pthread.h>\n\n"
+        "#if defined(__i386__) || defined(__x86_64__)\n"
+        "static inline uint8_t __reo_inb(uint16_t port) { uint8_t value; __asm__ __volatile__(\"inb %1, %0\" : \"=a\"(value) : \"Nd\"(port)); return value; }\n"
+        "static inline uint16_t __reo_inw(uint16_t port) { uint16_t value; __asm__ __volatile__(\"inw %1, %0\" : \"=a\"(value) : \"Nd\"(port)); return value; }\n"
+        "static inline uint32_t __reo_inl(uint16_t port) { uint32_t value; __asm__ __volatile__(\"inl %1, %0\" : \"=a\"(value) : \"Nd\"(port)); return value; }\n"
+        "static inline void __reo_outb(uint16_t port, uint8_t value) { __asm__ __volatile__(\"outb %0, %1\" : : \"a\"(value), \"Nd\"(port)); }\n"
+        "static inline void __reo_outw(uint16_t port, uint16_t value) { __asm__ __volatile__(\"outw %0, %1\" : : \"a\"(value), \"Nd\"(port)); }\n"
+        "static inline void __reo_outl(uint16_t port, uint32_t value) { __asm__ __volatile__(\"outl %0, %1\" : : \"a\"(value), \"Nd\"(port)); }\n"
+        "static inline void __reo_cli(void) { __asm__ __volatile__(\"cli\" ::: \"memory\"); }\n"
+        "static inline void __reo_sti(void) { __asm__ __volatile__(\"sti\" ::: \"memory\"); }\n"
+        "static inline void __reo_hlt(void) { __asm__ __volatile__(\"hlt\"); }\n"
+        "static inline void __reo_halt_forever(void) { __reo_cli(); for (;;) __reo_hlt(); }\n"
+        "#else\n"
+        "static inline uint8_t __reo_inb(uint16_t port) { (void)port; return 0; }\n"
+        "static inline uint16_t __reo_inw(uint16_t port) { (void)port; return 0; }\n"
+        "static inline uint32_t __reo_inl(uint16_t port) { (void)port; return 0; }\n"
+        "static inline void __reo_outb(uint16_t port, uint8_t value) { (void)port; (void)value; }\n"
+        "static inline void __reo_outw(uint16_t port, uint16_t value) { (void)port; (void)value; }\n"
+        "static inline void __reo_outl(uint16_t port, uint32_t value) { (void)port; (void)value; }\n"
+        "static inline void __reo_cli(void) { }\n"
+        "static inline void __reo_sti(void) { }\n"
+        "static inline void __reo_hlt(void) { }\n"
+        "static inline void __reo_halt_forever(void) { for (;;) { } }\n"
+        "#endif\n"
+
         /* Recursion depth guard: prevents unbounded user recursion from
          * overflowing the native stack (a segmentation fault with no
          * diagnostic). Each generated user function enters and leaves via

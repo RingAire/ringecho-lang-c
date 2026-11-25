@@ -85,6 +85,23 @@ void re0_builtin_init(Re0BuiltinRegistry *r) {
                 (const char*[]){"p"}, (const char*[]){"ptr"}, 1);
     add_builtin(r, "gc_release", "unit",
                 (const char*[]){"p"}, (const char*[]){"ptr"}, 1);
+    /* x86 port I/O and privileged instructions (kernel profile). */
+    add_builtin(r, "inb", "u8",
+                (const char*[]){"port"}, (const char*[]){"u16"}, 1);
+    add_builtin(r, "inw", "u16",
+                (const char*[]){"port"}, (const char*[]){"u16"}, 1);
+    add_builtin(r, "inl", "u32",
+                (const char*[]){"port"}, (const char*[]){"u16"}, 1);
+    add_builtin(r, "outb", "unit",
+                (const char*[]){"port", "value"}, (const char*[]){"u16", "u8"}, 2);
+    add_builtin(r, "outw", "unit",
+                (const char*[]){"port", "value"}, (const char*[]){"u16", "u16"}, 2);
+    add_builtin(r, "outl", "unit",
+                (const char*[]){"port", "value"}, (const char*[]){"u16", "u32"}, 2);
+    add_builtin(r, "cli", "unit", NULL, NULL, 0);
+    add_builtin(r, "sti", "unit", NULL, NULL, 0);
+    add_builtin(r, "hlt", "unit", NULL, NULL, 0);
+    add_builtin(r, "halt_forever", "unit", NULL, NULL, 0);
     /* String vectors use the same precise Vec<str> container machinery. */
     add_builtin(r, "svec_new", "svec", NULL, NULL, 0);
     add_builtin(r, "svec_push", "unit",

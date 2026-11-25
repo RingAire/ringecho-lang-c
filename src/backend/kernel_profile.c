@@ -46,8 +46,35 @@ void re0_kernel_prelude_emit(Re0Buffer *out) {
     re0_kernel_hooks_emit(out);
 }
 
+static const char KERNEL_IO[] =
+    "#if defined(__i386__) || defined(__x86_64__)\n"
+    "static inline uint8_t __reo_inb(uint16_t port) { uint8_t value; __asm__ __volatile__(\"inb %1, %0\" : \"=a\"(value) : \"Nd\"(port)); return value; }\n"
+    "static inline uint16_t __reo_inw(uint16_t port) { uint16_t value; __asm__ __volatile__(\"inw %1, %0\" : \"=a\"(value) : \"Nd\"(port)); return value; }\n"
+    "static inline uint32_t __reo_inl(uint16_t port) { uint32_t value; __asm__ __volatile__(\"inl %1, %0\" : \"=a\"(value) : \"Nd\"(port)); return value; }\n"
+    "static inline void __reo_outb(uint16_t port, uint8_t value) { __asm__ __volatile__(\"outb %0, %1\" : : \"a\"(value), \"Nd\"(port)); }\n"
+    "static inline void __reo_outw(uint16_t port, uint16_t value) { __asm__ __volatile__(\"outw %0, %1\" : : \"a\"(value), \"Nd\"(port)); }\n"
+    "static inline void __reo_outl(uint16_t port, uint32_t value) { __asm__ __volatile__(\"outl %0, %1\" : : \"a\"(value), \"Nd\"(port)); }\n"
+    "static inline void __reo_cli(void) { __asm__ __volatile__(\"cli\" ::: \"memory\"); }\n"
+    "static inline void __reo_sti(void) { __asm__ __volatile__(\"sti\" ::: \"memory\"); }\n"
+    "static inline void __reo_hlt(void) { __asm__ __volatile__(\"hlt\"); }\n"
+    "static inline void __reo_halt_forever(void) { __reo_cli(); for (;;) __reo_hlt(); }\n"
+    "#else\n"
+    "static inline uint8_t __reo_inb(uint16_t port) { (void)port; return 0; }\n"
+    "static inline uint16_t __reo_inw(uint16_t port) { (void)port; return 0; }\n"
+    "static inline uint32_t __reo_inl(uint16_t port) { (void)port; return 0; }\n"
+    "static inline void __reo_outb(uint16_t port, uint8_t value) { (void)port; (void)value; }\n"
+    "static inline void __reo_outw(uint16_t port, uint16_t value) { (void)port; (void)value; }\n"
+    "static inline void __reo_outl(uint16_t port, uint32_t value) { (void)port; (void)value; }\n"
+    "static inline void __reo_cli(void) { }\n"
+    "static inline void __reo_sti(void) { }\n"
+    "static inline void __reo_hlt(void) { }\n"
+    "static inline void __reo_halt_forever(void) { for (;;) { } }\n"
+    "#endif\n"
+    ;
+
 void re0_kernel_runtime_emit(Re0Buffer *out) {
     if (!out) return;
     re0_buffer_write_str(out, KERNEL_RUNTIME);
+    re0_buffer_write_str(out, KERNEL_IO);
     re0_kernel_arithmetic_emit(out);
 }
