@@ -110,8 +110,9 @@ Kernel-facing declaration attributes:
 - `unsafe fn` and `unsafe { ... }` mark privileged code. `asm(...)` now
   requires an unsafe context; `@naked`/`@interrupt` bodies count as unsafe.
   Pointer-dereference and FFI enforcement remain later hardening steps.
-- `asm("template")` emits `__asm__ __volatile__("template")`. Only a literal
-  template without operands/constraints is accepted so far.
+- `asm("template", "constraint"(expr), ...)` emits GCC extended asm. Output
+  constraints start with `=` or `+` and require a writable place; other
+  constraints are inputs. A `"memory"` clobber is always appended.
 - `@naked` suppresses the prologue and recursion guard; the body is expected to
   contain only `asm(...)` statements.
 - `@interrupt` emits the C `interrupt` attribute (x86: the function takes a

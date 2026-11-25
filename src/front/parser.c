@@ -1331,10 +1331,34 @@ static Re0Stmt *parse_asm(Re0Parser *p) {
                          "asm requires a string template");
         p->had_error = true;
     }
+    Re0AsmOperand *operands = NULL;
+    int operand_count = 0, operand_cap = 0;
+    while (check(p, TK_COMMA)) {
+        advance(p);
+        Re0Token constraint = expect(p, TK_STRING);
+        if (constraint.kind != TK_STRING) {
+            re0_error_append(p->errors, RE0_ERR_SYNTAX, span, NULL,
+                             "asm operand requires a string constraint");
+            p->had_error = true;
+            break;
+        }
+        expect(p, TK_LPAREN);
+        Re0Expr *value = parse_expr(p);
+        expect(p, TK_RPAREN);
+        if (operand_count == operand_cap) {
+            operand_cap = operand_cap ? operand_cap * 2 : 4;
+            operands = (Re0AsmOperand*)xrealloc(operands, sizeof(Re0AsmOperand) * (size_t)operand_cap);
+        }
+        operands[operand_count].constraint = re0_arena_strdup(p->arena, constraint.str_val ? constraint.str_val : "");
+        operands[operand_count].value = value;
+        operand_count++;
+    }
     expect(p, TK_RPAREN);
     if (check(p, TK_SEMICOLON)) advance(p);
     Re0Stmt *s = re0_stmt_make(STMT_ASM, span);
     s->asm_stmt.text = re0_arena_strdup(p->arena, text.str_val ? text.str_val : "");
+    s->asm_stmt.operands = operands;
+    s->asm_stmt.operand_count = operand_count;
     return s;
 }
 

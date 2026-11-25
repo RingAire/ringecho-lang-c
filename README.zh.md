@@ -101,7 +101,7 @@ rem publish            # 发布当前包
 - Component 关键字
 - 内核属性：静态变量/函数/字段的 `@align`、`@no_mangle`/`@export_name`、`@noreturn`；`extern` 链接器变量
 - 布局/可移植：无负载枚举的 `@repr(C|u8|u16|u32|u64)`、字段级 `@align`、`@cfg(target_arch=...)`/`@cfg(kernel|hosted|debug_assertions)`
-- 内核语法：`unsafe fn`/`unsafe { }`、`asm("...")` 模板、`@naked`/`@interrupt` 函数
+- 内核语法：`unsafe fn`/`unsafe { }`、带约束/操作数的 `asm("...")`、`@naked`/`@interrupt` 函数
 - x86 内核内建：`inb/inw/inl`、`outb/outw/outl`、`cli/sti/hlt`、`halt_forever`、`load_idt`
 - 宿主能力：`proc_spawn`（argv，不经 shell）、`getenv`、`file_exists`/`file_remove`/`file_rename`、`dir_create`、`eprint`/`eprintln`
 - 特权内建：`read_cr0/2/3`、`write_cr0/3`、`rdmsr`/`wrmsr`、`invlpg`、`read_tsc`、`int3`、`pause`

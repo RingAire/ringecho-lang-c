@@ -351,12 +351,39 @@ void c_gen_stmt(Re0Codegen *c, Re0Stmt *s, int depth) {
             re0_buffer_write_indent(b, depth);
             re0_buffer_write_str(b, "}\n");
             break;
-        case STMT_ASM:
+        case STMT_ASM: {
             re0_buffer_write_indent(b, depth);
             re0_buffer_write_str(b, "__asm__ __volatile__(");
             c_write_string_literal(b, s->asm_stmt.text);
-            re0_buffer_write_str(b, ");\n");
+            re0_buffer_write_str(b, " : ");
+            bool first = true;
+            for (int i = 0; i < s->asm_stmt.operand_count; i++) {
+                Re0AsmOperand *operand = &s->asm_stmt.operands[i];
+                if (!operand->constraint || !operand->constraint[0]) continue;
+                if (operand->constraint[0] != '=' && operand->constraint[0] != '+') continue;
+                if (!first) re0_buffer_write_str(b, ", ");
+                c_write_string_literal(b, operand->constraint);
+                re0_buffer_write_char(b, '(');
+                c_gen_expr(c, operand->value);
+                re0_buffer_write_char(b, ')');
+                first = false;
+            }
+            re0_buffer_write_str(b, " : ");
+            first = true;
+            for (int i = 0; i < s->asm_stmt.operand_count; i++) {
+                Re0AsmOperand *operand = &s->asm_stmt.operands[i];
+                if (!operand->constraint || !operand->constraint[0]) continue;
+                if (operand->constraint[0] == '=' || operand->constraint[0] == '+') continue;
+                if (!first) re0_buffer_write_str(b, ", ");
+                c_write_string_literal(b, operand->constraint);
+                re0_buffer_write_char(b, '(');
+                c_gen_expr(c, operand->value);
+                re0_buffer_write_char(b, ')');
+                first = false;
+            }
+            re0_buffer_write_str(b, " : \"memory\");\n");
             break;
+        }
         case STMT_EXTERN:
             for (int i = 0; i < s->extern_.func_count; i++)
                 c_gen_extern_decl(c, &s->extern_.funcs[i]);

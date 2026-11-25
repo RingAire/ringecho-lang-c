@@ -27,10 +27,23 @@ class AsmNakedTests(unittest.TestCase):
             self.assertTrue(generated, "compiler kept no generated C")
             text = generated[0].read_text(encoding="utf-8")
             self.assertIn("__attribute__((naked))", text)
-            self.assertIn('__asm__ __volatile__("ret")', text)
-            self.assertIn('__asm__ __volatile__("")', text)
+            self.assertIn('__asm__ __volatile__("ret" :', text)
+            self.assertIn('__asm__ __volatile__("" :', text)
             naked_body = text.split("void naked_stub", 1)[1].split("}", 1)[0]
             self.assertNotIn("__REO_DEPTH_GUARD", naked_body)
+
+    def test_asm_operands_emit_gcc_sections(self):
+        with tempfile.TemporaryDirectory(prefix="reo asm ops ", dir=ROOT / "target") as temporary:
+            root = Path(temporary)
+            source = ROOT / "tests" / "asm_operands.reo"
+            env = {**os.environ, "TMP": temporary, "TEMP": temporary,
+                   "TMPDIR": temporary, "REO_KEEP_C": "1"}
+            build = subprocess.run([str(COMPILER), "build", str(source), "-o", str(root / "probe.exe")],
+                                   env=env, cwd=root, capture_output=True, text=True, timeout=120)
+            self.assertEqual(build.returncode, 0, build.stdout + build.stderr)
+            text = next(root.rglob("re0_codegen_*.c")).read_text(encoding="utf-8")
+            self.assertIn('__asm__ __volatile__("" : "=r"(value) : "0"(', text)
+            self.assertIn(': "memory");', text)
 
 
 if __name__ == "__main__":

@@ -1375,6 +1375,23 @@ static void check_stmt_impl(Re0Sema *s, Re0Stmt *stmt) {
                                  "asm(...) requires an unsafe fn or unsafe block");
                 s->had_error = true;
             }
+            for (int i = 0; i < stmt->asm_stmt.operand_count; i++) {
+                Re0AsmOperand *operand = &stmt->asm_stmt.operands[i];
+                if (!operand->constraint || !operand->constraint[0]) {
+                    re0_error_append(s->errors, RE0_ERR_SEMANTIC, stmt->span, NULL,
+                                     "asm operand constraint cannot be empty");
+                    s->had_error = true;
+                    continue;
+                }
+                Re0Type *type = infer_type(s, operand->value);
+                (void)type;
+                bool output = operand->constraint[0] == '=' || operand->constraint[0] == '+';
+                if (output && !writable_place(s, operand->value)) {
+                    re0_error_append(s->errors, RE0_ERR_SEMANTIC, stmt->span, NULL,
+                                     "asm output operand requires a writable place");
+                    s->had_error = true;
+                }
+            }
             break;
         case STMT_LET: {
             /* check for duplicate definition */

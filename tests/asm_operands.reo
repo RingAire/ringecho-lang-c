@@ -1,0 +1,8 @@
+fn main() {
+    let value: u64 = 0u64;
+    unsafe {
+        asm("", "=r"(value), "0"(7u64));
+    }
+    assert(value == 7u64);
+    println("ok");
+}

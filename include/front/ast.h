@@ -97,6 +97,7 @@ typedef struct { char *mname; Re0FnCallParam *params; int param_count; char *ret
 typedef struct { char *name; Re0FnCallParam *params; int param_count; char *ret_type; bool variadic;
                  Re0Linkage linkage; Re0CallingConvention convention; } Re0ExternFnDecl;
 typedef struct { char *name; char *type; } Re0ExternVarDecl;
+typedef struct { char *constraint; Re0Expr *value; } Re0AsmOperand;
 typedef struct { Re0Expr *cond; Re0Stmt **body; int body_count; } Re0IfBranch;
 
 struct Re0Stmt {
@@ -132,7 +133,7 @@ struct Re0Stmt {
         struct { char *name; char *target; } type_alias;
         struct { char *name; Re0StructFieldDecl *state; int state_count; Re0Stmt **methods; int method_count; } component;
         struct { Re0Stmt **body; int body_count; } unsafe_block;
-        struct { char *text; } asm_stmt;
+        struct { char *text; Re0AsmOperand *operands; int operand_count; } asm_stmt;
         struct { Re0Stmt *inner; } pub;
         struct { char *attr_name; char *attr_arg; Re0Stmt *inner; } attribute;
     };
