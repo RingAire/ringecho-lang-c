@@ -1,17 +1,46 @@
 #include "backend/c_declaration.h"
 #include "backend/backend_c_internal.h"
 #include "base/re0_limits.h"
+#include <string.h>
+#include <stdio.h>
 
-void re0_c_declaration_attributes_emit(Re0Codegen *c, const Re0Stmt *stmt, bool definition) {
+static void macho_section_name(const char *section, char *out, size_t cap) {
+    if (!out || cap == 0) return;
+    size_t n = 0;
+    for (const char *p = section; p && *p && n + 1 < cap; ++p) {
+        unsigned char ch = (unsigned char)*p;
+        bool ok = (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') ||
+                  (ch >= '0' && ch <= '9') || ch == '_';
+        char value = ok ? (char)ch : '_';
+        if (value == '_' && (n == 0 || out[n - 1] == '_')) continue;
+        out[n++] = value;
+    }
+    out[n] = '\0';
+    if (n == 0) snprintf(out, cap, "reo_section");
+}
+
+void re0_c_declaration_attributes_emit(Re0Codegen *c, const Re0Stmt *stmt, bool definition, bool code) {
     if (!c || !stmt) return;
     bool used = definition && stmt->declaration.used;
     if (!stmt->declaration.section && !stmt->declaration.weak && !used) return;
     re0_buffer_write_str(&c->output, "__attribute__((");
     bool comma = false;
     if (stmt->declaration.section) {
-        re0_buffer_write_str(&c->output, "section(");
-        c_write_string_literal(&c->output, stmt->declaration.section);
-        re0_buffer_write_char(&c->output, ')'); comma = true;
+        const char *section = stmt->declaration.section;
+        if (strchr(section, ',')) {
+            re0_buffer_write_str(&c->output, "section(");
+            c_write_string_literal(&c->output, section);
+            re0_buffer_write_char(&c->output, ')');
+        } else {
+            char macho[16];
+            macho_section_name(section, macho, sizeof(macho));
+            re0_buffer_write_str(&c->output, "__REO_SECTION(");
+            c_write_string_literal(&c->output, section);
+            re0_buffer_write_str(&c->output, code ? ", \"__TEXT\", " : ", \"__DATA\", ");
+            c_write_string_literal(&c->output, macho);
+            re0_buffer_write_char(&c->output, ')');
+        }
+        comma = true;
     }
     if (stmt->declaration.weak) {
         re0_buffer_write_str(&c->output, comma ? ", weak" : "weak"); comma = true;

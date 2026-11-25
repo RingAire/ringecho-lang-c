@@ -114,7 +114,7 @@ void c_gen_stmt(Re0Codegen *c, Re0Stmt *s, int depth) {
                 c->had_error = true; break;
             }
             re0_buffer_write_str(b, "static ");
-            re0_c_declaration_attributes_emit(c, s, true);
+            re0_c_declaration_attributes_emit(c, s, true, false);
             re0_buffer_write_fmt(b, "%s %s", ctype, s->static_decl.name);
             if (constant) { re0_buffer_write_str(b, " = "); re0_c_static_literal_emit(c, s->static_decl.value); }
             re0_buffer_write_str(b, ";\n");
@@ -310,7 +310,7 @@ void c_gen_stmt(Re0Codegen *c, Re0Stmt *s, int depth) {
                 re0_type_free_tree(rt);
             }
             if (never_ret) re0_buffer_write_str(b, "__attribute__((noreturn)) ");
-            re0_c_declaration_attributes_emit(c, s, true);
+            re0_c_declaration_attributes_emit(c, s, true, true);
             re0_buffer_write_fmt(b, "%s %s(", ret_c, fn_name);
             if(!s->function.param_count) re0_buffer_write_str(b,"void");
             for (int i = 0; i < s->function.param_count; i++) {

@@ -71,9 +71,15 @@ static bool ensure_temp_directory(Re0Build *b) {
         }
     }
 #else
-    /* mkdtemp atomically creates a private directory under the system temp root. */
-    snprintf(b->temp_dir, sizeof(b->temp_dir), "/tmp/ringecho-XXXXXX");
-    if (mkdtemp(b->temp_dir)) return true;
+    /* mkdtemp atomically creates a private directory under TMPDIR (the POSIX
+     * convention) or /tmp. Tests and sandboxes point TMPDIR at their own root. */
+    const char *tmp_root = getenv("TMPDIR");
+    if (!tmp_root || !*tmp_root) tmp_root = "/tmp";
+    size_t root_len = strlen(tmp_root);
+    while (root_len > 1 && tmp_root[root_len - 1] == '/') root_len--;
+    int written = snprintf(b->temp_dir, sizeof(b->temp_dir),
+                           "%.*s/ringecho-XXXXXX", (int)root_len, tmp_root);
+    if (written > 0 && (size_t)written < sizeof(b->temp_dir) && mkdtemp(b->temp_dir)) return true;
 #endif
     b->temp_dir[0] = 0;
     re0_error_append(b->errors, RE0_ERR_IO, RE0_SPAN_ZERO, NULL,

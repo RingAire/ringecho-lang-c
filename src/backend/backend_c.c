@@ -8,6 +8,15 @@
 static void c_begin(Re0Codegen *c) {
     reset_c_state();
     c_globals_reset();
+    /* ELF accepts a bare section name; Mach-O needs "segment,section" and a
+     * section name of at most 16 bytes. Codegen passes both spellings. */
+    re0_buffer_write_str(&c->output,
+        "#if defined(__APPLE__)\n"
+        "#define __REO_SECTION(elf_name, segment, macho_name) section(segment \",\" macho_name)\n"
+        "#else\n"
+        "#define __REO_SECTION(elf_name, segment, macho_name) section(elf_name)\n"
+        "#endif\n"
+        );
     if (c->kernel) {
         /* Kernel profile: self-contained prelude + minimal runtime, emitted by
          * the dedicated kernel_profile module. */
