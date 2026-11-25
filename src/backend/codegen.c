@@ -54,8 +54,8 @@ static void emit_forward_declarations(Re0Codegen *c, Re0StmtVec *checked) {
         }
         if (s->kind == STMT_FUNCTION && s->function.type_param_count == 0) {
             track_fn_ret(s->function.name, s->function.ret_type ? s->function.ret_type : "unit");
-            const char *fn_name = s->function.name;
-            if (strcmp(fn_name, "main") == 0) fn_name = "main_";
+            const char *fn_name = fn_symbol_name(s);
+            track_fn_symbol(s->function.name, fn_name);
             const char *ret_c = c_storage_return(s->function.ret_type);
             re0_c_declaration_attributes_emit(c, s, false, true);
             re0_buffer_write_fmt(b, "%s %s(", ret_c, fn_name);

@@ -60,6 +60,10 @@ static int c_gen_expr_impl(Re0Codegen *c, Re0Expr *e) {
                     break;
                 }
             }
+            if (!var_c_type(e->ident.name)) {
+                const char *mapped = lookup_fn_symbol(e->ident.name);
+                if (mapped) { re0_buffer_write_str(b, mapped); break; }
+            }
             re0_buffer_write_str(b, e->ident.name);
             break;
         }

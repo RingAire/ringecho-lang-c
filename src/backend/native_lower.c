@@ -386,6 +386,8 @@ bool n_lower(NModule *m, Re0StmtVec *checked) {
                 Re0ExternFnDecl *e = &s->extern_.funcs[j];
                 register_function(m, e->name, e->ret_type, e->param_count, NULL, e);
             }
+            if (s->extern_.var_count > 0)
+                n_error(m, s->span, "external variables are not supported by the native backend");
         } else n_error(m, s->span, "top-level declaration is not supported yet");
     }
     Lower *l = calloc(1, sizeof(*l));

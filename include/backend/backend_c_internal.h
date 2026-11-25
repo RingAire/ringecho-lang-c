@@ -28,6 +28,7 @@
 #define MAX_INSTANTIATED RE0_MAX_INSTANTIATED
 #define MAX_GENERIC_FNS RE0_MAX_GENERIC_FNS
 #define MAX_STRUCT_FIELDS 512
+#define MAX_FN_SYMBOLS 1024
 
 typedef struct {
     char *name;
@@ -36,6 +37,7 @@ typedef struct {
     bool is_string;
 } Re0CVarType;
 typedef struct { char name[128]; char ret_c_type[128]; } FnRetSlot;
+typedef struct { char reo[128]; char c[128]; } FnSymbolSlot;
 typedef struct { char struct_name[64]; char field[64]; char c_type[128]; } StructFieldSlot;
 typedef struct {
     char name[64]; Re0Expr *lambda;
@@ -115,6 +117,10 @@ const char *c_wider_int_type(const char *a, const char *b);
 void c_write_string_literal(Re0Buffer *b, const char *value);
 void c_write_char_literal(Re0Buffer *b, char c);
 void track_fn_ret(const char *name, const char *reo_ret);
+void track_fn_symbol(const char *reo_name, const char *c_name);
+void clear_fn_symbols(void);
+const char *lookup_fn_symbol(const char *reo_name);
+const char *fn_symbol_name(const Re0Stmt *stmt);
 const char *fn_ret_c_type(const char *name);
 void track_struct_field(const char *struct_name, const char *field, const char *reo_type);
 const char *struct_field_c_type(const char *struct_name, const char *field);

@@ -300,8 +300,8 @@ void c_gen_stmt(Re0Codegen *c, Re0Stmt *s, int depth) {
             }
             track_fn_ret(s->function.name,
                          s->function.ret_type ? s->function.ret_type : "unit");
-            const char *fn_name = s->function.name;
-            if (strcmp(fn_name, "main") == 0) fn_name = "main_";
+            const char *fn_name = fn_symbol_name(s);
+            track_fn_symbol(s->function.name, fn_name);
             const char *ret_c = c_storage_return(s->function.ret_type);
             bool never_ret = false;
             if (s->function.ret_type) {
@@ -309,7 +309,7 @@ void c_gen_stmt(Re0Codegen *c, Re0Stmt *s, int depth) {
                 never_ret = rt && rt->kind == RE0_TYPE_NEVER;
                 re0_type_free_tree(rt);
             }
-            if (never_ret) re0_buffer_write_str(b, "__attribute__((noreturn)) ");
+            if (never_ret && !s->declaration.noreturn) re0_buffer_write_str(b, "__attribute__((noreturn)) ");
             re0_c_declaration_attributes_emit(c, s, true, true);
             re0_buffer_write_fmt(b, "%s %s(", ret_c, fn_name);
             if(!s->function.param_count) re0_buffer_write_str(b,"void");
@@ -348,6 +348,11 @@ void c_gen_stmt(Re0Codegen *c, Re0Stmt *s, int depth) {
         case STMT_EXTERN:
             for (int i = 0; i < s->extern_.func_count; i++)
                 c_gen_extern_decl(c, &s->extern_.funcs[i]);
+            for (int i = 0; i < s->extern_.var_count; i++) {
+                const char *ctype = reo_type_to_c(s->extern_.vars[i].type);
+                re0_buffer_write_fmt(b, "extern %s %s;\n", ctype, s->extern_.vars[i].name);
+                track_var(s->extern_.vars[i].name, ctype);
+            }
             re0_buffer_write_char(b, '\n');
             break;
         case STMT_TRAIT:
@@ -440,6 +445,7 @@ void c_gen_stmt(Re0Codegen *c, Re0Stmt *s, int depth) {
 void reset_c_state(void) {
     clear_var_types();
     g_fn_ret_count = 0;
+    clear_fn_symbols();
     g_struct_field_count = 0;
     g_lambda_count = 0;
     g_lambda_counter = 0;

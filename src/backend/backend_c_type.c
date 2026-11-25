@@ -3,6 +3,8 @@
 RE0_THREAD_LOCAL Re0CVarType var_types[MAX_VAR_TYPES];
 RE0_THREAD_LOCAL int var_type_count;
 RE0_THREAD_LOCAL FnRetSlot g_fn_rets[MAX_FN_RETS];
+RE0_THREAD_LOCAL FnSymbolSlot g_fn_symbols[MAX_FN_SYMBOLS];
+RE0_THREAD_LOCAL int g_fn_symbol_count;
 RE0_THREAD_LOCAL int g_fn_ret_count;
 RE0_THREAD_LOCAL StructFieldSlot g_struct_fields[MAX_STRUCT_FIELDS];
 RE0_THREAD_LOCAL int g_struct_field_count;
@@ -48,6 +50,37 @@ void track_fn_ret(const char *name, const char *ret) {
     FnRetSlot *f = &g_fn_rets[g_fn_ret_count++];
     copy_type(f->name, sizeof(f->name), name); copy_type(f->ret_c_type, sizeof(f->ret_c_type), reo_type_to_c(ret));
 }
+void track_fn_symbol(const char *reo_name, const char *c_name) {
+    if (!reo_name || !c_name) return;
+    for (int i = 0; i < g_fn_symbol_count; i++) {
+        if (strcmp(g_fn_symbols[i].reo, reo_name) == 0) {
+            if (strcmp(g_fn_symbols[i].c, c_name) != 0) c_storage_fail("conflicting function symbols");
+            return;
+        }
+        if (strcmp(g_fn_symbols[i].c, c_name) == 0) c_storage_fail("duplicate exported function symbol");
+    }
+    if (g_fn_symbol_count == MAX_FN_SYMBOLS) { c_storage_fail("function symbol tracking limit exceeded"); return; }
+    FnSymbolSlot *slot = &g_fn_symbols[g_fn_symbol_count++];
+    copy_type(slot->reo, sizeof(slot->reo), reo_name);
+    copy_type(slot->c, sizeof(slot->c), c_name);
+}
+
+void clear_fn_symbols(void) { g_fn_symbol_count = 0; }
+
+const char *lookup_fn_symbol(const char *reo_name) {
+    if (!reo_name) return NULL;
+    for (int i = 0; i < g_fn_symbol_count; i++)
+        if (strcmp(g_fn_symbols[i].reo, reo_name) == 0) return g_fn_symbols[i].c;
+    return NULL;
+}
+
+const char *fn_symbol_name(const Re0Stmt *stmt) {
+    if (!stmt || stmt->kind != STMT_FUNCTION) return NULL;
+    if (stmt->declaration.export_name) return stmt->declaration.export_name;
+    if (strcmp(stmt->function.name, "main") == 0) return "main_";
+    return stmt->function.name;
+}
+
 const char *fn_ret_c_type(const char *name) {
     for (int i = 0; i < g_fn_ret_count; i++) if (strcmp(g_fn_rets[i].name, name) == 0) return g_fn_rets[i].ret_c_type;
     return NULL;

@@ -100,6 +100,7 @@ Releases fallback) and is versioned and released independently.
 - Match expressions (integer, float, bool, char, string content + enum tag; typed scalar results)
 - Pipeline operator `|>`
 - Component keyword
+- Kernel attributes: `@align` on statics/functions, `@no_mangle`/`@export_name`, `@noreturn`; `extern` linker variables
 - for-in range + string iteration
 - spawn/await concurrency (pthread)
 - GC: 3 modes (none/auto/manual). `none` leaves strings untracked; `manual`

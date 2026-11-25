@@ -22,7 +22,8 @@ static void macho_section_name(const char *section, char *out, size_t cap) {
 void re0_c_declaration_attributes_emit(Re0Codegen *c, const Re0Stmt *stmt, bool definition, bool code) {
     if (!c || !stmt) return;
     bool used = definition && stmt->declaration.used;
-    if (!stmt->declaration.section && !stmt->declaration.weak && !used) return;
+    if (!stmt->declaration.section && !stmt->declaration.weak && !used &&
+        !stmt->declaration.align && !(code && stmt->declaration.noreturn)) return;
     re0_buffer_write_str(&c->output, "__attribute__((");
     bool comma = false;
     if (stmt->declaration.section) {
@@ -45,7 +46,16 @@ void re0_c_declaration_attributes_emit(Re0Codegen *c, const Re0Stmt *stmt, bool 
     if (stmt->declaration.weak) {
         re0_buffer_write_str(&c->output, comma ? ", weak" : "weak"); comma = true;
     }
+    if (stmt->declaration.align) {
+        re0_buffer_write_fmt(&c->output, comma ? ", aligned(%u)" : "aligned(%u)",
+                             stmt->declaration.align);
+        comma = true;
+    }
     if (used) re0_buffer_write_str(&c->output, comma ? ", used" : "used");
+    if (code && stmt->declaration.noreturn) {
+        re0_buffer_write_str(&c->output, comma ? ", noreturn" : "noreturn");
+        comma = true;
+    }
     re0_buffer_write_str(&c->output, ")) ");
 }
 

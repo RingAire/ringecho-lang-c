@@ -1,0 +1,30 @@
+@align(64)
+static table: [u8; 4] = [1u8, 2u8, 3u8, 4u8];
+
+@no_mangle
+fn exported() -> i64 {
+    return 7;
+}
+
+@align(16)
+fn aligned_fn() -> i64 {
+    return 3;
+}
+
+@export_name("reo_alias")
+fn aliased() -> i64 {
+    return 9;
+}
+
+@noreturn
+fn stop() -> never {
+    return stop();
+}
+
+fn main() {
+    assert(exported() == 7i64);
+    assert(aliased() == 9i64);
+    assert(aligned_fn() == 3i64);
+    assert(table[0] == 1u8);
+    println("ok");
+}

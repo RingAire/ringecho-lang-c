@@ -88,6 +88,22 @@ source of truth, not the host compiler).
   field's size and alignment (newtype). Cannot be combined with packed.
 
 Invalid requests (`@align` not a power of two / out of range / weakening,
+
+Kernel-facing declaration attributes:
+
+- `@align(N)` applies to structs, functions and static variables; `N` is a
+  power of two in `1..4096`. Static page tables, GDT/IDT storage and vector
+  tables can therefore be aligned without linker-script tricks.
+- `@no_mangle` keeps the declaration's own symbol name; `@export_name("name")`
+  emits the definition under an explicit C identifier. Calls inside REO resolve
+  to the exported symbol. Both are restricted to free functions (not `main`,
+  generics or async functions).
+- `@noreturn` marks a function that never returns (panic/halt); `never` return
+  types imply the same attribute.
+- `extern { static symbol: T; }` declares storage provided by a linker script
+  or an external object. It emits `extern <ctype> symbol;` and can be used as an
+  lvalue or with `&symbol`; the native backend rejects external variables.
+
 `@repr(transparent)` with 0 or >1 fields, packed+transparent, unknown
 `@repr(kind)`) are rejected at compile time, eagerly on declaration.
 

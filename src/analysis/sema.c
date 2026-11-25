@@ -1696,6 +1696,24 @@ static void check_stmt_impl(Re0Sema *s, Re0Stmt *stmt) {
                 }
                 re0_model_set_fn_abi(s->model, decl->name, decl->linkage, cc);
             }
+            for (int i = 0; i < stmt->extern_.var_count; i++) {
+                Re0ExternVarDecl *var = &stmt->extern_.vars[i];
+                if (re0_scope_lookup_local(s->global_scope, var->name)) {
+                    re0_error_append(s->errors, RE0_ERR_SEMANTIC, stmt->span, NULL,
+                                     "duplicate external variable '%s'", var->name);
+                    s->had_error = true;
+                    continue;
+                }
+                Re0Type *type = resolve_type(s, var->type);
+                if (!type) {
+                    re0_error_append(s->errors, RE0_ERR_SEMANTIC, stmt->span, NULL,
+                                     "unknown external variable type '%s'",
+                                     var->type ? var->type : "<missing>");
+                    s->had_error = true;
+                    type = re0_type_make(RE0_TYPE_UNKNOWN, NULL);
+                }
+                re0_scope_define(s->global_scope, var->name, type, false);
+            }
             break;
         case STMT_TYPE_ALIAS:
             re0_model_register_type_alias(s->model, stmt->type_alias.name,

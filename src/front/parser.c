@@ -823,6 +823,22 @@ static void *parse_extern_fn(Re0Parser *p, Re0ExternFnDecl **funcs, int *count, 
     return funcs;
 }
 
+static void parse_extern_var(Re0Parser *p, Re0ExternVarDecl **vars, int *count, int *cap) {
+    expect(p, TK_KW_STATIC);
+    Re0Token name = expect(p, TK_IDENT);
+    if (name.kind == TK_ERROR) return;
+    expect(p, TK_COLON);
+    char *type = re0_arena_strdup(p->arena, parse_type_name(p));
+    expect(p, TK_SEMICOLON);
+    if (*count == *cap) {
+        *cap = *cap ? *cap * 2 : 8;
+        *vars = (Re0ExternVarDecl*)xrealloc(*vars, sizeof(Re0ExternVarDecl) * (size_t)*cap);
+    }
+    (*vars)[*count].name = re0_arena_strdup(p->arena, name.str_val);
+    (*vars)[*count].type = type;
+    (*count)++;
+}
+
 static Re0Stmt *parse_extern(Re0Parser *p) {
     Re0Span span = peek(p)->span; advance(p);
     /* Optional ABI string; defaults to C linkage with the target's default C
@@ -839,16 +855,23 @@ static Re0Stmt *parse_extern(Re0Parser *p) {
         advance(p);
     }
     Re0ExternFnDecl *funcs = NULL; int func_count = 0; int func_cap = 0;
+    Re0ExternVarDecl *vars = NULL; int var_count = 0; int var_cap = 0;
     if (check(p, TK_LBRACE)) {
         advance(p);
-        while (!check(p, TK_RBRACE) && !re0_stream_eof(p->stream))
-            parse_extern_fn(p, &funcs, &func_count, &func_cap, linkage, cc);
+        while (!check(p, TK_RBRACE) && !re0_stream_eof(p->stream)) {
+            if (check(p, TK_KW_STATIC)) parse_extern_var(p, &vars, &var_count, &var_cap);
+            else parse_extern_fn(p, &funcs, &func_count, &func_cap, linkage, cc);
+        }
         expect(p, TK_RBRACE);
+    } else if (check(p, TK_KW_STATIC)) {
+        parse_extern_var(p, &vars, &var_count, &var_cap);
     } else {
         parse_extern_fn(p, &funcs, &func_count, &func_cap, linkage, cc);
     }
     Re0Stmt *s = re0_stmt_make(STMT_EXTERN, span);
-    s->extern_.funcs = funcs; s->extern_.func_count = func_count; return s;
+    s->extern_.funcs = funcs; s->extern_.func_count = func_count;
+    s->extern_.vars = vars; s->extern_.var_count = var_count;
+    return s;
 }
 
 static Re0Stmt *parse_import(Re0Parser *p) {
@@ -1133,8 +1156,16 @@ static Re0Stmt *parse_from_import(Re0Parser *p) {
 static void apply_layout_attribute(Re0Parser *p, const char *name, const char *arg, Re0Stmt *inner) {
     unsigned depth = 0;
     while (inner && inner->kind == STMT_ATTRIBUTE && depth++ < 64) inner = inner->attribute.inner;
-    if (!inner || inner->kind != STMT_STRUCT) return;
+    if (!inner) return;
+    bool is_struct = inner->kind == STMT_STRUCT;
+    bool is_decl = inner->kind == STMT_STATIC || inner->kind == STMT_FUNCTION;
     if (strcmp(name, "align") == 0) {
+        if (!is_struct && !is_decl) {
+            re0_error_append(p->errors, RE0_ERR_SYNTAX, inner->span, NULL,
+                             "@align requires a struct, function or static declaration");
+            p->had_error = true;
+            return;
+        }
         if (!arg) { re0_error_append(p->errors, RE0_ERR_SYNTAX, inner->span, NULL,
                                      "@align requires a power-of-two byte count"); p->had_error = true; return; }
         char *end = NULL;
@@ -1144,8 +1175,15 @@ static void apply_layout_attribute(Re0Parser *p, const char *name, const char *a
                              "invalid @align(%s): expected a power of two in 1..4096", arg);
             p->had_error = true; return;
         }
-        inner->struct_decl.explicit_align = (unsigned)v;
+        if (is_struct) inner->struct_decl.explicit_align = (unsigned)v;
+        else inner->declaration.align = (unsigned)v;
     } else if (strcmp(name, "repr") == 0) {
+        if (!is_struct) {
+            re0_error_append(p->errors, RE0_ERR_SYNTAX, inner->span, NULL,
+                             "@repr requires a struct declaration");
+            p->had_error = true;
+            return;
+        }
         if (!arg) { re0_error_append(p->errors, RE0_ERR_SYNTAX, inner->span, NULL,
                                      "@repr requires an argument"); p->had_error = true; return; }
         if (strcmp(arg, "C") == 0) { /* default layout; nothing to store */ }
