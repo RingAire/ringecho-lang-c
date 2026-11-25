@@ -71,6 +71,12 @@ static const char KERNEL_IO[] =
     "static inline void __reo_hlt(void) { }\n"
     "static inline void __reo_load_idt(uint16_t limit, const void *base) { (void)limit; (void)base; }\n"
     "static inline void __reo_halt_forever(void) { for (;;) { } }\n"
+    "static const char* __reo_getenv(const char* name) { (void)name; return \"\"; }\n"
+    "static bool __reo_file_exists(const char* path) { (void)path; return false; }\n"
+    "static bool __reo_file_remove(const char* path) { (void)path; return false; }\n"
+    "static bool __reo_file_rename(const char* from, const char* to) { (void)from; (void)to; return false; }\n"
+    "static bool __reo_dir_create(const char* path) { (void)path; return false; }\n"
+    "static int32_t __reo_proc_spawn(const char* program, const char* const* args, size_t count) { (void)program; (void)args; (void)count; return -1; }\n"
     "#endif\n"
     ;
 

@@ -121,6 +121,14 @@ void re0_builtin_init(Re0BuiltinRegistry *r) {
     add_builtin(r, "path_base", "str", str_s, str_t, 1);
     add_builtin(r, "path_isdir", "bool", str_s, str_t, 1);
     /* proc: subprocess */
+    add_builtin(r, "proc_spawn", "i32",
+                (const char*[]){"program", "args"}, (const char*[]){"str", "svec"}, 2);
+    add_builtin(r, "getenv", "str", str_s, str_t, 1);
+    add_builtin(r, "file_exists", "bool", str_s, str_t, 1);
+    add_builtin(r, "file_remove", "bool", str_s, str_t, 1);
+    add_builtin(r, "file_rename", "bool",
+                (const char*[]){"from", "to"}, (const char*[]){"str", "str"}, 2);
+    add_builtin(r, "dir_create", "bool", str_s, str_t, 1);
     add_builtin(r, "proc_run", "i32", str_s, str_t, 1);
 }
 

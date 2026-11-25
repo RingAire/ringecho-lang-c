@@ -116,6 +116,11 @@ Kernel-facing declaration attributes:
   contain only `asm(...)` statements.
 - `@interrupt` emits the C `interrupt` attribute (x86: the function takes a
   `*mut ...` frame parameter) and suppresses the recursion guard.
+- Host builtins for the compiler driver: `proc_spawn(program, svec_args)` runs
+  argv directly (no shell) and returns the exit code; `getenv(name)` returns
+  the value or an empty string; `file_exists`, `file_remove`, `file_rename` and
+  `dir_create` operate under the same relative-path sandbox as `file_read`.
+  The kernel profile compiles these to inert stubs.
 - Kernel builtins: `inb/inw/inl`, `outb/outw/outl`, `cli`, `sti`, `hlt` and
   `halt_forever` and `load_idt(limit, base)`. On non-x86 targets they compile
   to inert stubs.

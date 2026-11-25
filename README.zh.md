@@ -103,6 +103,7 @@ rem publish            # 发布当前包
 - 布局/可移植：无负载枚举的 `@repr(C|u8|u16|u32|u64)`、字段级 `@align`、`@cfg(target_arch=...)`/`@cfg(kernel|hosted|debug_assertions)`
 - 内核语法：`unsafe fn`/`unsafe { }`、`asm("...")` 模板、`@naked`/`@interrupt` 函数
 - x86 内核内建：`inb/inw/inl`、`outb/outw/outl`、`cli/sti/hlt`、`halt_forever`、`load_idt`
+- 宿主能力：`proc_spawn`（argv，不经 shell）、`getenv`、`file_exists`/`file_remove`/`file_rename`、`dir_create`
 - for-in 区间 + 字符串迭代
 - spawn/await 并发（pthread）
 - GC：3 种模式（none/auto/manual）。`none` 不登记字符串；`manual` 提供

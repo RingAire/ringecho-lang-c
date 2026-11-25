@@ -465,6 +465,29 @@ static int c_gen_expr_impl(Re0Codegen *c, Re0Expr *e) {
                     re0_buffer_write_char(b, ')');
                     break;
                 }
+                if (strcmp(fn, "getenv") == 0) { re0_buffer_write_str(b, "__reo_getenv((char*)"); goto gen1; }
+                if (strcmp(fn, "file_exists") == 0) { re0_buffer_write_str(b, "__reo_file_exists((char*)"); goto gen1; }
+                if (strcmp(fn, "file_remove") == 0) { re0_buffer_write_str(b, "__reo_file_remove((char*)"); goto gen1; }
+                if (strcmp(fn, "dir_create") == 0) { re0_buffer_write_str(b, "__reo_dir_create((char*)"); goto gen1; }
+                if (strcmp(fn, "file_rename") == 0) {
+                    re0_buffer_write_str(b, "__reo_file_rename((char*)");
+                    if (e->call.arg_count > 0) c_gen_expr(c, e->call.args[0]); else re0_buffer_write_str(b, "\"\"");
+                    re0_buffer_write_str(b, ", (char*)");
+                    if (e->call.arg_count > 1) c_gen_expr(c, e->call.args[1]); else re0_buffer_write_str(b, "\"\"");
+                    re0_buffer_write_char(b, ')');
+                    break;
+                }
+                if (strcmp(fn, "proc_spawn") == 0) {
+                    int t = c->temp_counter++;
+                    re0_buffer_write_str(b, "__extension__ ({ __typeof__(");
+                    if (e->call.arg_count > 1) c_gen_expr(c, e->call.args[1]); else re0_buffer_write_str(b, "svec_new()");
+                    re0_buffer_write_fmt(b, ") __reo_args%d = (", t);
+                    if (e->call.arg_count > 1) c_gen_expr(c, e->call.args[1]); else re0_buffer_write_str(b, "svec_new()");
+                    re0_buffer_write_fmt(b, "); __reo_proc_spawn((char*)");
+                    if (e->call.arg_count > 0) c_gen_expr(c, e->call.args[0]); else re0_buffer_write_str(b, "\"\"");
+                    re0_buffer_write_fmt(b, ", (const char* const*)__reo_args%d->data, __reo_args%d->len); })", t, t);
+                    break;
+                }
                 if (strcmp(fn, "file_read") == 0)  { re0_buffer_write_str(b, "__reo_file_read((char*)"); goto gen1; }
                 if (strcmp(fn, "file_write") == 0) {
                     re0_buffer_write_str(b, "__reo_file_write((char*)");
