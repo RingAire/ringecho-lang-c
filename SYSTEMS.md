@@ -121,6 +121,11 @@ Kernel-facing declaration attributes:
   the value or an empty string; `file_exists`, `file_remove`, `file_rename` and
   `dir_create` operate under the same relative-path sandbox as `file_read`.
   The kernel profile compiles these to inert stubs.
+- Privileged x86 builtins: `read_cr0/read_cr2/read_cr3`, `write_cr0/write_cr3`,
+  `rdmsr/wrmsr`, `invlpg`, `read_tsc`, `int3` and `pause`; non-x86 compiles to
+  inert stubs.
+- `eprint`/`eprintln` write to stderr on hosted targets; the kernel profile
+  routes them to the weak `__reo_kernel_diagnostic` hook.
 - Kernel builtins: `inb/inw/inl`, `outb/outw/outl`, `cli`, `sti`, `hlt` and
   `halt_forever` and `load_idt(limit, base)`. On non-x86 targets they compile
   to inert stubs.

@@ -103,7 +103,8 @@ rem publish            # 發佈目前套件
 - 佈局/可移植：無負載列舉的 `@repr(C|u8|u16|u32|u64)`、欄位級 `@align`、`@cfg(target_arch=...)`/`@cfg(kernel|hosted|debug_assertions)`
 - 核心語法：`unsafe fn`/`unsafe { }`、`asm("...")` 模板、`@naked`/`@interrupt` 函式
 - x86 核心內建：`inb/inw/inl`、`outb/outw/outl`、`cli/sti/hlt`、`halt_forever`、`load_idt`
-- 宿主能力：`proc_spawn`（argv，不經 shell）、`getenv`、`file_exists`/`file_remove`/`file_rename`、`dir_create`
+- 宿主能力：`proc_spawn`（argv，不經 shell）、`getenv`、`file_exists`/`file_remove`/`file_rename`、`dir_create`、`eprint`/`eprintln`
+- 特權內建：`read_cr0/2/3`、`write_cr0/3`、`rdmsr`/`wrmsr`、`invlpg`、`read_tsc`、`int3`、`pause`
 - for-in 區間 + 字串迭代
 - spawn/await 並行（pthread）
 - GC 引擎：3 種模式（none/auto/manual）× 3 種演算法（tracing/arc-cycle/hybrid）

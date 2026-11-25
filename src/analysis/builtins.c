@@ -98,6 +98,20 @@ void re0_builtin_init(Re0BuiltinRegistry *r) {
                 (const char*[]){"port", "value"}, (const char*[]){"u16", "u16"}, 2);
     add_builtin(r, "outl", "unit",
                 (const char*[]){"port", "value"}, (const char*[]){"u16", "u32"}, 2);
+    add_builtin(r, "read_cr0", "usize", NULL, NULL, 0);
+    add_builtin(r, "read_cr2", "usize", NULL, NULL, 0);
+    add_builtin(r, "read_cr3", "usize", NULL, NULL, 0);
+    add_builtin(r, "write_cr0", "unit", (const char*[]){"value"}, (const char*[]){"usize"}, 1);
+    add_builtin(r, "write_cr3", "unit", (const char*[]){"value"}, (const char*[]){"usize"}, 1);
+    add_builtin(r, "rdmsr", "u64", (const char*[]){"msr"}, (const char*[]){"u32"}, 1);
+    add_builtin(r, "wrmsr", "unit",
+                (const char*[]){"msr", "value"}, (const char*[]){"u32", "u64"}, 2);
+    add_builtin(r, "invlpg", "unit", (const char*[]){"addr"}, (const char*[]){"ptr"}, 1);
+    add_builtin(r, "read_tsc", "u64", NULL, NULL, 0);
+    add_builtin(r, "int3", "unit", NULL, NULL, 0);
+    add_builtin(r, "pause", "unit", NULL, NULL, 0);
+    add_builtin(r, "eprint", "unit", str_s, str_t, 1);
+    add_builtin(r, "eprintln", "unit", str_s, str_t, 1);
     add_builtin(r, "load_idt", "unit",
                 (const char*[]){"limit", "base"}, (const char*[]){"u16", "ptr"}, 2);
     add_builtin(r, "cli", "unit", NULL, NULL, 0);

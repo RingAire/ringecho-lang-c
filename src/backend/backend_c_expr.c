@@ -565,6 +565,30 @@ static int c_gen_expr_impl(Re0Codegen *c, Re0Expr *e) {
                     re0_buffer_write_char(b, ')');
                     break;
                 }
+                if (strcmp(fn, "read_cr0") == 0) { re0_buffer_write_str(b, "__reo_read_cr0()"); break; }
+                if (strcmp(fn, "read_cr2") == 0) { re0_buffer_write_str(b, "__reo_read_cr2()"); break; }
+                if (strcmp(fn, "read_cr3") == 0) { re0_buffer_write_str(b, "__reo_read_cr3()"); break; }
+                if (strcmp(fn, "write_cr0") == 0) { re0_buffer_write_str(b, "__reo_write_cr0((uintptr_t)"); goto gen1; }
+                if (strcmp(fn, "write_cr3") == 0) { re0_buffer_write_str(b, "__reo_write_cr3((uintptr_t)"); goto gen1; }
+                if (strcmp(fn, "rdmsr") == 0) { re0_buffer_write_str(b, "__reo_rdmsr((uint32_t)"); goto gen1; }
+                if (strcmp(fn, "wrmsr") == 0) {
+                    re0_buffer_write_str(b, "__reo_wrmsr((uint32_t)");
+                    if (e->call.arg_count > 0) c_gen_expr(c, e->call.args[0]); else re0_buffer_write_str(b, "0");
+                    re0_buffer_write_str(b, ", (uint64_t)");
+                    if (e->call.arg_count > 1) c_gen_expr(c, e->call.args[1]); else re0_buffer_write_str(b, "0");
+                    re0_buffer_write_char(b, ')');
+                    break;
+                }
+                if (strcmp(fn, "invlpg") == 0) { re0_buffer_write_str(b, "__reo_invlpg((const void*)"); goto gen1; }
+                if (strcmp(fn, "read_tsc") == 0) { re0_buffer_write_str(b, "__reo_read_tsc()"); break; }
+                if (strcmp(fn, "int3") == 0) { re0_buffer_write_str(b, "__reo_int3()"); break; }
+                if (strcmp(fn, "pause") == 0) { re0_buffer_write_str(b, "__reo_pause()"); break; }
+                if (strcmp(fn, "eprint") == 0 || strcmp(fn, "eprintln") == 0) {
+                    re0_buffer_write_fmt(b, "({ __reo_%s((char*)", fn);
+                    if (e->call.arg_count > 0) c_gen_expr(c, e->call.args[0]); else re0_buffer_write_str(b, "\"\"");
+                    re0_buffer_write_str(b, "); (__reo_unit){}; })");
+                    break;
+                }
                 if (strcmp(fn, "load_idt") == 0) {
                     re0_buffer_write_str(b, "__reo_load_idt((uint16_t)");
                     if (e->call.arg_count > 0) c_gen_expr(c, e->call.args[0]); else re0_buffer_write_str(b, "0");
