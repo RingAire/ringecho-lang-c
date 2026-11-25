@@ -59,6 +59,17 @@ Windows 本地使用 `mingw32-make`、`SHELL="C:/PROGRA~1/Git/bin/sh.exe"`，
   同时修复这三个 make 入口在 Windows 下缺少可执行后缀及执行引用的问题。
 - 独立 rnu 的 i686 QEMU 仍通过，退出 33；这不是 rnu 用户态自举验证。
 
+
+## 2026-11-25 增量：前端语法自消费
+
+- REO 前端新增 `--parse FILE`（只扫描/解析，不做名字解析）和 `--tokens FILE`。
+- 补齐 `import`、顶层 `static`、`if` 表达式语法；修正 `at()` 只比较 token
+  文本、导致字符串内容 `")"` 被当成右括号的问题（改为同时检查 token kind）。
+- `compiler-reo/` 下 **全部 8 个 `.reo` 模块**都能被 REO 前端解析通过；
+  `tests/selfhost/test_self_parse.py` 将其固定为回归。
+- 这仍然只是语法自消费：`--file` 的 import 合并、static 符号、if 表达式类型
+  检查尚未完成，Stage1 代码生成也没有开始。
+
 ## 后续门槛（尚未完成）
 
 1. **完整前端自消费**：补 import/static/属性/初始化/所有表达式语法；前端能

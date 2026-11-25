@@ -8,11 +8,12 @@ Stage: seed. Files:
 - `lexer.reo` — tokenizes a source string and self-checks the result.
 - `parser.reo` — `ident = number;` parsing seed.
 - `expr.reo` — expression AST, precedence climbing, evaluator.
-- `frontend.reo` — statements/blocks, `if`/`else`, `while`, assignments, enums,
-  function declarations with parameter/return types, a deterministic AST dump,
-  scoped lexical name resolution, and initial type checking. Its self-check
-  includes a first self-consumption probe: it parses and resolves `lexer.reo`
-   with zero errors.
+- `frontend.reo` — statements/blocks, `if`/`else` (statement and expression),
+  `while`, assignments, enums, imports, `static` globals, function declarations
+  with parameter/return types, a deterministic AST dump, scoped lexical name
+  resolution, and initial type checking. `--parse FILE` parses without semantic
+  resolution; every module in this directory parses cleanly. `--file FILE`
+  additionally resolves/checks and is the next bootstrap gate.
 - `state.reo` — shared token/AST storage and resource limits, owned by the driver.
 - `types.reo` — structural pointer/reference/array/slice/tuple/function/generic
   type parsing, canonical printing and identity; no placeholder erasure.
@@ -20,6 +21,9 @@ Stage: seed. Files:
 - `type_tests.reo` — executed type/declaration roundtrip and rejection checks.
 
 Run one: `target/Release/rev run compiler-reo/frontend.reo`.
+
+Parse a module: `frontend --parse compiler-reo/types.reo` (relative paths only;
+the frontend uses the same sandboxed file reader as other REO programs).
 Run all: `make test-selfhost`.
 
 `make test-selfhost-types PYTHON=python` additionally builds the frontend and
