@@ -28,6 +28,7 @@ void re0_runtime_c_emit(Re0Buffer *out) {
         "static inline void __reo_cli(void) { __asm__ __volatile__(\"cli\" ::: \"memory\"); }\n"
         "static inline void __reo_sti(void) { __asm__ __volatile__(\"sti\" ::: \"memory\"); }\n"
         "static inline void __reo_hlt(void) { __asm__ __volatile__(\"hlt\"); }\n"
+        "static inline void __reo_load_idt(uint16_t limit, const void *base) { struct __attribute__((packed)) { uint16_t limit; uintptr_t base; } idtr = { limit, (uintptr_t)base }; __asm__ __volatile__(\"lidt %0\" : : \"m\"(idtr)); }\n"
         "static inline void __reo_halt_forever(void) { __reo_cli(); for (;;) __reo_hlt(); }\n"
         "#else\n"
         "static inline uint8_t __reo_inb(uint16_t port) { (void)port; return 0; }\n"
@@ -39,6 +40,7 @@ void re0_runtime_c_emit(Re0Buffer *out) {
         "static inline void __reo_cli(void) { }\n"
         "static inline void __reo_sti(void) { }\n"
         "static inline void __reo_hlt(void) { }\n"
+        "static inline void __reo_load_idt(uint16_t limit, const void *base) { (void)limit; (void)base; }\n"
         "static inline void __reo_halt_forever(void) { for (;;) { } }\n"
         "#endif\n"
 

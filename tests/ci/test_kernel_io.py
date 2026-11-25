@@ -20,6 +20,8 @@ fn timer_isr(frame: *mut u8) {
 }
 
 fn main() {
+    let idt: [u32; 2] = [0u32; 2];
+    load_idt(0u16, (&idt[0]) as ptr);
     outb(0x3F8u16, 0x41u8);
     outw(0x3F8u16, 0x4142u16);
     outl(0x3F8u16, 0x41424344u32);
@@ -55,7 +57,8 @@ class KernelIoTests(unittest.TestCase):
             text = generated[0].read_text(encoding="utf-8")
             for symbol in ("__reo_inb", "__reo_inw", "__reo_inl",
                            "__reo_outb", "__reo_outw", "__reo_outl",
-                           "__reo_cli", "__reo_sti", "__reo_hlt", "__reo_halt_forever"):
+                           "__reo_cli", "__reo_sti", "__reo_hlt", "__reo_halt_forever",
+                           "__reo_load_idt"):
                 self.assertIn(symbol, text)
             self.assertIn("__attribute__((interrupt))", text)
             self.assertIn('__asm__ __volatile__("inb %1, %0"', text)

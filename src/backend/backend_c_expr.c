@@ -542,6 +542,14 @@ static int c_gen_expr_impl(Re0Codegen *c, Re0Expr *e) {
                     re0_buffer_write_char(b, ')');
                     break;
                 }
+                if (strcmp(fn, "load_idt") == 0) {
+                    re0_buffer_write_str(b, "__reo_load_idt((uint16_t)");
+                    if (e->call.arg_count > 0) c_gen_expr(c, e->call.args[0]); else re0_buffer_write_str(b, "0");
+                    re0_buffer_write_str(b, ", (const void*)");
+                    if (e->call.arg_count > 1) c_gen_expr(c, e->call.args[1]); else re0_buffer_write_str(b, "0");
+                    re0_buffer_write_char(b, ')');
+                    break;
+                }
                 if (strcmp(fn, "cli") == 0) { re0_buffer_write_str(b, "__reo_cli()"); break; }
                 if (strcmp(fn, "sti") == 0) { re0_buffer_write_str(b, "__reo_sti()"); break; }
                 if (strcmp(fn, "hlt") == 0) { re0_buffer_write_str(b, "__reo_hlt()"); break; }

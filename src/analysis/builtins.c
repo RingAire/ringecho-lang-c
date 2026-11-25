@@ -98,6 +98,8 @@ void re0_builtin_init(Re0BuiltinRegistry *r) {
                 (const char*[]){"port", "value"}, (const char*[]){"u16", "u16"}, 2);
     add_builtin(r, "outl", "unit",
                 (const char*[]){"port", "value"}, (const char*[]){"u16", "u32"}, 2);
+    add_builtin(r, "load_idt", "unit",
+                (const char*[]){"limit", "base"}, (const char*[]){"u16", "ptr"}, 2);
     add_builtin(r, "cli", "unit", NULL, NULL, 0);
     add_builtin(r, "sti", "unit", NULL, NULL, 0);
     add_builtin(r, "hlt", "unit", NULL, NULL, 0);

@@ -117,7 +117,8 @@ Kernel-facing declaration attributes:
 - `@interrupt` emits the C `interrupt` attribute (x86: the function takes a
   `*mut ...` frame parameter) and suppresses the recursion guard.
 - Kernel builtins: `inb/inw/inl`, `outb/outw/outl`, `cli`, `sti`, `hlt` and
-  `halt_forever`. On non-x86 targets they compile to inert stubs.
+  `halt_forever` and `load_idt(limit, base)`. On non-x86 targets they compile
+  to inert stubs.
 - `@cfg(target_arch="x86|x86_64|aarch64|arm")`, `@cfg(kernel)`, `@cfg(hosted)`
   and `@cfg(debug_assertions)` select declarations for the actual build target;
   `target_arch` follows `--kernel-target` for kernel builds and the host for
