@@ -1321,7 +1321,50 @@ static Re0Stmt *parse_stmt(Re0Parser *p) {
     return s;
 }
 
+static Re0Stmt *parse_asm(Re0Parser *p) {
+    Re0Span span = peek(p)->span;
+    advance(p); /* asm */
+    expect(p, TK_LPAREN);
+    Re0Token text = expect(p, TK_STRING);
+    if (text.kind != TK_STRING) {
+        re0_error_append(p->errors, RE0_ERR_SYNTAX, span, NULL,
+                         "asm requires a string template");
+        p->had_error = true;
+    }
+    expect(p, TK_RPAREN);
+    if (check(p, TK_SEMICOLON)) advance(p);
+    Re0Stmt *s = re0_stmt_make(STMT_ASM, span);
+    s->asm_stmt.text = re0_arena_strdup(p->arena, text.str_val ? text.str_val : "");
+    return s;
+}
+
 static Re0Stmt *parse_stmt_inner(Re0Parser *p) {
+    if (check(p, TK_KW_UNSAFE)) {
+        Re0Span span = peek(p)->span;
+        advance(p);
+        if (check(p, TK_KW_FN)) {
+            Re0Stmt *fn = parse_fn(p);
+            fn->function.is_unsafe = true;
+            return fn;
+        }
+        if (check(p, TK_LBRACE)) {
+            advance(p);
+            Re0StmtVec body; Re0StmtVec_init(&body);
+            while (!check(p, TK_RBRACE) && !re0_stream_eof(p->stream))
+                Re0StmtVec_push(&body, parse_stmt(p));
+            expect(p, TK_RBRACE);
+            Re0Stmt *s = re0_stmt_make(STMT_UNSAFE, span);
+            int count = (int)Re0StmtVec_len(&body);
+            s->unsafe_block.body = take_stmt_vec(p, &body);
+            s->unsafe_block.body_count = count;
+            return s;
+        }
+        re0_error_append(p->errors, RE0_ERR_SYNTAX, span, NULL,
+                         "unsafe must be followed by fn or a block");
+        p->had_error = true;
+        return re0_stmt_make(STMT_EXPR, span);
+    }
+    if (check(p, TK_KW_ASM)) return parse_asm(p);
     if (check(p, TK_KW_LET)) return parse_let(p);
     if (check(p, TK_KW_CONST)) return parse_const(p);
     if (check(p, TK_KW_STATIC)) return parse_static(p);

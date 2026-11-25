@@ -322,7 +322,7 @@ void c_gen_stmt(Re0Codegen *c, Re0Stmt *s, int depth) {
             re0_buffer_write_str(b, ") {\n");
             /* recursion depth guard: bounded user recursion instead of a
              * native stack overflow (RAII cleanup unwinds on every return). */
-            re0_buffer_write_str(b, "    __REO_DEPTH_GUARD;\n");
+            if (!s->declaration.naked) re0_buffer_write_str(b, "    __REO_DEPTH_GUARD;\n");
             /* track param types */
             clear_var_types();
             for (int i = 0; i < s->function.param_count; i++)
@@ -344,6 +344,18 @@ void c_gen_stmt(Re0Codegen *c, Re0Stmt *s, int depth) {
             break;
         case STMT_ENUM:
             (void)reo_type_to_c(s->enum_decl.name);
+            break;
+        case STMT_UNSAFE:
+            re0_buffer_write_str(b, "{\n");
+            c_gen_body(c, s->unsafe_block.body, s->unsafe_block.body_count, depth + 1);
+            re0_buffer_write_indent(b, depth);
+            re0_buffer_write_str(b, "}\n");
+            break;
+        case STMT_ASM:
+            re0_buffer_write_indent(b, depth);
+            re0_buffer_write_str(b, "__asm__ __volatile__(");
+            c_write_string_literal(b, s->asm_stmt.text);
+            re0_buffer_write_str(b, ");\n");
             break;
         case STMT_EXTERN:
             for (int i = 0; i < s->extern_.func_count; i++)

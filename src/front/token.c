@@ -13,6 +13,7 @@ static const char *kw_names[] = {
     [TK_KW_CONST]="const", [TK_KW_STATIC]="static", [TK_KW_EXTERN]="extern",
     [TK_KW_COMPONENT]="component",
     [TK_KW_ASYNC]="async", [TK_KW_AWAIT]="await", [TK_KW_SPAWN]="spawn",
+    [TK_KW_UNSAFE]="unsafe", [TK_KW_ASM]="asm",
 };
 
 static const char *sym_names[] = {
@@ -34,7 +35,7 @@ static const char *sym_names[] = {
 };
 
 const char *re0_token_kind_name(Re0TokenKind k) {
-    if (k >= TK_KW_FN && k <= TK_KW_SPAWN) return kw_names[k];
+    if (k >= TK_KW_FN && k <= TK_KW_ASM) return kw_names[k];
     if (k >= TK_LBRACE && k <= TK_SLASHEQUAL) return sym_names[k];
     switch (k) {
         case TK_IDENT: return "identifier";
@@ -49,7 +50,7 @@ const char *re0_token_kind_name(Re0TokenKind k) {
 }
 
 bool re0_token_is_keyword(Re0TokenKind k) {
-    return k >= TK_KW_FN && k <= TK_KW_SPAWN;
+    return k >= TK_KW_FN && k <= TK_KW_ASM;
 }
 
 bool re0_token_is_binop(Re0TokenKind k) {

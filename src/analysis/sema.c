@@ -1359,6 +1359,16 @@ static void check_stmt_impl(Re0Sema *s, Re0Stmt *stmt) {
         case STMT_MODULE:
             for(int i=0;i<stmt->module.body_count;i++)check_stmt_inner(s,stmt->module.body[i]);
             break;
+        case STMT_UNSAFE: {
+            Re0Scope *saved = s->current_scope;
+            s->current_scope = re0_sema_open_scope(s, s->current_scope);
+            for (int i = 0; i < stmt->unsafe_block.body_count; i++)
+                check_stmt_inner(s, stmt->unsafe_block.body[i]);
+            s->current_scope = saved;
+            break;
+        }
+        case STMT_ASM:
+            break;
         case STMT_LET: {
             /* check for duplicate definition */
             if (re0_scope_lookup_local(s->current_scope, stmt->let_stmt.name)) {

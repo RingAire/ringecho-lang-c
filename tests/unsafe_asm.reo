@@ -1,0 +1,20 @@
+@naked
+fn naked_stub() {
+    asm("ret");
+}
+
+unsafe fn read_ptr(p: *mut u8) -> u8 {
+    return *p;
+}
+
+fn main() {
+    let x: u8 = 7u8;
+    let p: *mut u8 = (&mut x) as *mut u8;
+    let v: u8 = 0u8;
+    unsafe {
+        v = read_ptr(p);
+    }
+    assert(v == 7u8);
+    asm("");
+    println("ok");
+}

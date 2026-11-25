@@ -95,11 +95,11 @@ bool re0_declaration_attribute_apply(Re0ErrorList *errors, Re0Span span,
     }
 
     if (strcmp(name, "no_mangle") == 0 || strcmp(name, "export_name") == 0 ||
-        strcmp(name, "noreturn") == 0) {
+        strcmp(name, "noreturn") == 0 || strcmp(name, "naked") == 0) {
         if (!is_function)
-            return reject(errors, span, "no_mangle/export_name/noreturn require a function definition");
+            return reject(errors, span, "no_mangle/export_name/noreturn/naked require a function definition");
         if (target->function.type_param_count || target->function.is_async)
-            return reject(errors, span, "no_mangle/export_name/noreturn are not supported on generic/async functions");
+            return reject(errors, span, "no_mangle/export_name/noreturn/naked are not supported on generic/async functions");
         if (strcmp(target->function.name, "main") == 0)
             return reject(errors, span, "the entry function 'main' cannot be renamed or marked noreturn");
         if (strcmp(name, "no_mangle") == 0) {
@@ -117,6 +117,12 @@ bool re0_declaration_attribute_apply(Re0ErrorList *errors, Re0Span span,
                 return reject(errors, span, "@export_name must be a valid C identifier");
             if (target->declaration.export_name) return reject(errors, span, "duplicate export name attribute");
             target->declaration.export_name = argument;
+            return true;
+        }
+        if (strcmp(name, "naked") == 0) {
+            if (parentheses || argument) return reject(errors, span, "@naked does not accept arguments");
+            if (target->declaration.naked) return reject(errors, span, "duplicate @naked attribute");
+            target->declaration.naked = true;
             return true;
         }
         if (parentheses || argument) return reject(errors, span, "@noreturn does not accept arguments");

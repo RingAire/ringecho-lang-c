@@ -107,6 +107,13 @@ Kernel-facing declaration attributes:
   integers and `match` use the integer value. Enums with payloads reject it.
 - `@align(N)` may prefix a struct field; the layout manager and generated C both
   honour it, and an alignment weaker than the field's natural one is rejected.
+- `unsafe fn` and `unsafe { ... }` mark privileged code. The parser and C
+  backend support both; enforcement of pointer/FFI/asm use inside safe code is
+  tracked as a later hardening step.
+- `asm("template")` emits `__asm__ __volatile__("template")`. Only a literal
+  template without operands/constraints is accepted so far.
+- `@naked` suppresses the prologue and recursion guard; the body is expected to
+  contain only `asm(...)` statements.
 - `@cfg(target_arch="x86|x86_64|aarch64|arm")`, `@cfg(kernel)`, `@cfg(hosted)`
   and `@cfg(debug_assertions)` select declarations for the actual build target;
   `target_arch` follows `--kernel-target` for kernel builds and the host for

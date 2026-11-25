@@ -136,6 +136,11 @@ static void lint_stmt(Re0Stmt *s, Re0ErrorList *errors, int depth) {
         case STMT_RETURN:
             if (s->return_stmt.value) lint_expr(s->return_stmt.value);
             break;
+        case STMT_UNSAFE:
+            lint_stmts(s->unsafe_block.body, s->unsafe_block.body_count, errors, depth + 1);
+            break;
+        case STMT_ASM:
+            break;
         case STMT_IF: {
             for (int i = 0; i < s->if_stmt.branch_count; i++) {
                 lint_expr(s->if_stmt.branches[i].cond);

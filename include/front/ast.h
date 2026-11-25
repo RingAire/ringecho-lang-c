@@ -36,6 +36,7 @@ typedef enum {
     STMT_FUNCTION, STMT_STRUCT, STMT_ENUM, STMT_TRAIT, STMT_IMPL,
     STMT_IMPORT, STMT_MODULE, STMT_EXTERN, STMT_CONST, STMT_STATIC,
     STMT_TYPE_ALIAS, STMT_COMPONENT, STMT_PUB, STMT_ATTRIBUTE, STMT_STORE,
+    STMT_UNSAFE, STMT_ASM,
 } Re0StmtKind;
 
 typedef struct Re0Expr Re0Expr;
@@ -102,7 +103,7 @@ struct Re0Stmt {
     Re0StmtKind kind; Re0Span span;
     /* Definition-owned metadata; strings belong to the compiler arena. */
     struct { const char *section; const char *export_name;
-             unsigned align; bool used, weak, no_mangle, noreturn; } declaration;
+             unsigned align; bool used, weak, no_mangle, noreturn, naked; } declaration;
     union {
         struct { Re0Expr *expr; } expr_stmt;
         struct { char *name; char *type; Re0Expr *init; } let_stmt;
@@ -115,7 +116,7 @@ struct Re0Stmt {
         struct { char *var; Re0Expr *iter; Re0Stmt **body; int body_count; } for_stmt;
         struct { Re0Expr *value; } return_stmt;
         struct { Re0Expr *value; } break_stmt;
-        struct { char *name; Re0FnParam *params; int param_count; char *ret_type; Re0Stmt **body; int body_count; char **type_params; int type_param_count; bool is_async; } function;
+        struct { char *name; Re0FnParam *params; int param_count; char *ret_type; Re0Stmt **body; int body_count; char **type_params; int type_param_count; bool is_async; bool is_unsafe; } function;
         struct { char *name; Re0StructFieldDecl *fields; int field_count; char **type_params; int type_param_count;
                  bool packed; unsigned explicit_align; bool transparent; bool is_union; } struct_decl;
         struct { char *name; Re0EnumVariantDecl *variants; int variant_count; int repr; } enum_decl;
@@ -130,6 +131,8 @@ struct Re0Stmt {
         struct { char *name; char *type; Re0Expr *value; } static_decl;
         struct { char *name; char *target; } type_alias;
         struct { char *name; Re0StructFieldDecl *state; int state_count; Re0Stmt **methods; int method_count; } component;
+        struct { Re0Stmt **body; int body_count; } unsafe_block;
+        struct { char *text; } asm_stmt;
         struct { Re0Stmt *inner; } pub;
         struct { char *attr_name; char *attr_arg; Re0Stmt *inner; } attribute;
     };

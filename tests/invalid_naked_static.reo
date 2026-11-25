@@ -1,0 +1,3 @@
+@naked
+static x: u8;
+fn main() {}

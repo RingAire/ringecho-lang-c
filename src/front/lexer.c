@@ -96,6 +96,8 @@ static Re0Token make_id(Re0Lexer *l, char *lexeme, Re0Pos start) {
     else if (strcmp(lexeme, "async") == 0) t.kind = TK_KW_ASYNC;
     else if (strcmp(lexeme, "await") == 0) t.kind = TK_KW_AWAIT;
     else if (strcmp(lexeme, "spawn") == 0) t.kind = TK_KW_SPAWN;
+    else if (strcmp(lexeme, "unsafe") == 0) t.kind = TK_KW_UNSAFE;
+    else if (strcmp(lexeme, "asm") == 0) t.kind = TK_KW_ASM;
     return t;
 }
 

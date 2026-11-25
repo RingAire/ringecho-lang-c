@@ -23,7 +23,7 @@ void re0_c_declaration_attributes_emit(Re0Codegen *c, const Re0Stmt *stmt, bool 
     if (!c || !stmt) return;
     bool used = definition && stmt->declaration.used;
     if (!stmt->declaration.section && !stmt->declaration.weak && !used &&
-        !stmt->declaration.align && !(code && stmt->declaration.noreturn)) return;
+        !stmt->declaration.align && !(code && (stmt->declaration.noreturn || stmt->declaration.naked))) return;
     re0_buffer_write_str(&c->output, "__attribute__((");
     bool comma = false;
     if (stmt->declaration.section) {
@@ -49,6 +49,10 @@ void re0_c_declaration_attributes_emit(Re0Codegen *c, const Re0Stmt *stmt, bool 
     if (stmt->declaration.align) {
         re0_buffer_write_fmt(&c->output, comma ? ", aligned(%u)" : "aligned(%u)",
                              stmt->declaration.align);
+        comma = true;
+    }
+    if (code && stmt->declaration.naked) {
+        re0_buffer_write_str(&c->output, comma ? ", naked" : "naked");
         comma = true;
     }
     if (used) re0_buffer_write_str(&c->output, comma ? ", used" : "used");

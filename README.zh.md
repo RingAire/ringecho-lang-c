@@ -101,6 +101,7 @@ rem publish            # 发布当前包
 - Component 关键字
 - 内核属性：静态变量/函数/字段的 `@align`、`@no_mangle`/`@export_name`、`@noreturn`；`extern` 链接器变量
 - 布局/可移植：无负载枚举的 `@repr(C|u8|u16|u32|u64)`、字段级 `@align`、`@cfg(target_arch=...)`/`@cfg(kernel|hosted|debug_assertions)`
+- 内核语法：`unsafe fn`/`unsafe { }`、`asm("...")` 模板、`@naked` 函数
 - for-in 区间 + 字符串迭代
 - spawn/await 并发（pthread）
 - GC：3 种模式（none/auto/manual）。`none` 不登记字符串；`manual` 提供
