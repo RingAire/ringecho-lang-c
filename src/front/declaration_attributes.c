@@ -65,6 +65,17 @@ bool re0_declaration_attribute_apply(Re0ErrorList *errors, Re0Span span,
         return true;
     }
 
+    if (strcmp(name, "thread_local") == 0) {
+        if (!target || target->kind != STMT_STATIC)
+            return reject(errors, span, "@thread_local requires a static variable");
+        if (parentheses || argument)
+            return reject(errors, span, "@thread_local does not accept arguments");
+        if (target->declaration.thread_local)
+            return reject(errors, span, "duplicate @thread_local attribute");
+        target->declaration.thread_local = true;
+        return true;
+    }
+
     if (strcmp(name, "align") == 0 || strcmp(name, "repr") == 0) {
         /* Value and target validation happens in apply_layout_attribute. */
         return true;

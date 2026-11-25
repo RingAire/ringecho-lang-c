@@ -102,7 +102,7 @@ Releases fallback) and is versioned and released independently.
 - Component keyword
 - Kernel attributes: `@align` on statics/functions/fields, `@no_mangle`/`@export_name`, `@noreturn`; `extern` linker variables
 - Layout/portability: fieldless enum `@repr(C|u8|u16|u32|u64)`, field-level `@align`, `@cfg(target_arch=...)`/`@cfg(kernel|hosted|debug_assertions)`
-- Kernel syntax: `unsafe fn`/`unsafe { }`, `asm("...")` templates with constraints/operands, `@naked` and `@interrupt` functions
+- Kernel syntax: `unsafe fn`/`unsafe { }`, `asm("...")` templates with constraints/operands, `@naked`/`@interrupt`, `@thread_local` statics
 - x86 kernel builtins: `inb/inw/inl`, `outb/outw/outl`, `cli/sti/hlt`, `halt_forever`, `load_idt`
 - Host capabilities: argv-based `proc_spawn`, `getenv`, `file_exists`/`file_remove`/`file_rename`, `dir_create`, `eprint`/`eprintln`
 - Privileged builtins: `read_cr0/2/3`, `write_cr0/3`, `rdmsr`/`wrmsr`, `invlpg`, `read_tsc`, `int3`, `pause`

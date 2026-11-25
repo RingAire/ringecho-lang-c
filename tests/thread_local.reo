@@ -1,0 +1,8 @@
+@thread_local
+static counter: i64 = 0;
+
+fn main() {
+    counter = 5;
+    assert(counter == 5);
+    println("ok");
+}

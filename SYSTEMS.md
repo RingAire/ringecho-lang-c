@@ -130,6 +130,8 @@ Kernel-facing declaration attributes:
 - Kernel builtins: `inb/inw/inl`, `outb/outw/outl`, `cli`, `sti`, `hlt` and
   `halt_forever` and `load_idt(limit, base)`. On non-x86 targets they compile
   to inert stubs.
+- `@thread_local` on a static emits C11 `_Thread_local`; the kernel profile
+  rejects it because it has no TLS setup yet.
 - `@cfg(target_arch="x86|x86_64|aarch64|arm")`, `@cfg(kernel)`, `@cfg(hosted)`
   and `@cfg(debug_assertions)` select declarations for the actual build target;
   `target_arch` follows `--kernel-target` for kernel builds and the host for

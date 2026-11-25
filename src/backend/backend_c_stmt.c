@@ -113,7 +113,14 @@ void c_gen_stmt(Re0Codegen *c, Re0Stmt *s, int depth) {
                                  "kernel static initialization requires an image-constant literal; initialize this object explicitly at startup");
                 c->had_error = true; break;
             }
+            if (c->kernel && s->declaration.thread_local) {
+                re0_error_append(c->errors, RE0_ERR_SEMANTIC, s->span, NULL,
+                                 "@thread_local requires a hosted TLS runtime; the kernel profile has no TLS setup");
+                c->had_error = true;
+                break;
+            }
             re0_buffer_write_str(b, "static ");
+            if (s->declaration.thread_local) re0_buffer_write_str(b, "_Thread_local ");
             re0_c_declaration_attributes_emit(c, s, true, false);
             re0_buffer_write_fmt(b, "%s %s", ctype, s->static_decl.name);
             if (constant) { re0_buffer_write_str(b, " = "); re0_c_static_literal_emit(c, s->static_decl.value); }
