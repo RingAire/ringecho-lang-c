@@ -20,9 +20,14 @@ Stage: seed. Files:
 - `types.reo` — structural pointer/reference/array/slice/tuple/function/generic
   type parsing, canonical printing and identity; no placeholder erasure.
 - `declarations.reo` — struct/untagged union/type-alias declaration parsing.
+- `codegen.reo` — Stage1 seed: emits C for functions, i64/string values, let,
+  if/while, assignment, calls, `println` and `assert`; not a full backend.
 - `type_tests.reo` — executed type/declaration roundtrip and rejection checks.
 
 Run one: `target/Release/rev run compiler-reo/frontend.reo`.
+
+Emit C: `frontend --emit-c tests/stage1/simple.reo target/simple.c`, then build
+that file with a host C compiler. This is a Stage1 seed, not self-hosting.
 
 Parse a module: `frontend --parse compiler-reo/types.reo` (relative paths only;
 the frontend uses the same sandboxed file reader as other REO programs).

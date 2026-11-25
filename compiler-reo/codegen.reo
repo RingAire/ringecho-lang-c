@@ -1,0 +1,244 @@
+import "types"
+
+/* Stage1 C emitter for a small integer/string subset. The flat AST and symbol
+ * tables are owned by the driver; this module only renders them. */
+
+fn c_type_code(code: i64) -> str {
+    if (code == TUnit || code == TNever) { return "void"; }
+    if (code == TBool) { return "bool"; }
+    if (code == TI8) { return "int8_t"; }
+    if (code == TI16) { return "int16_t"; }
+    if (code == TI32) { return "int32_t"; }
+    if (code == TI64) { return "int64_t"; }
+    if (code == TIsize) { return "intptr_t"; }
+    if (code == TU8) { return "uint8_t"; }
+    if (code == TU16) { return "uint16_t"; }
+    if (code == TU32) { return "uint32_t"; }
+    if (code == TU64) { return "uint64_t"; }
+    if (code == TUsize) { return "uintptr_t"; }
+    if (code == TF32) { return "float"; }
+    if (code == TF64) { return "double"; }
+    if (code == TChar) { return "uint8_t"; }
+    if (code == TStr) { return "const char*"; }
+    if (code == TPtr) { return "void*"; }
+    return "int64_t";
+}
+
+fn c_type_node(t: i64) -> str {
+    if t < 0 { return "void"; }
+    let code: i64 = na(t);
+    if (code == TNamed) { return svec_get(names, nb(t)); }
+    if (code == TPointer) { return str_concat(c_type_node(nb(t)), "*"); }
+    if (code == TReference) { return str_concat(c_type_node(nb(t)), "*"); }
+    return c_type_code(code);
+}
+
+fn c_escape(text: str) -> str {
+    let out: str = "\"";
+    let i: i64 = 0;
+    while i < str_len(text) {
+        let c: char = str_char_at(text, i);
+        if c == '"' { out = str_concat(out, "\\\""); }
+        else if c == '\\' { out = str_concat(out, "\\\\"); }
+        else if c == '\n' { out = str_concat(out, "\\n"); }
+        else if c == '\r' { out = str_concat(out, "\\r"); }
+        else if c == '\t' { out = str_concat(out, "\\t"); }
+        else { out = str_concat(out, char_to_str(c)); }
+        i += 1;
+    }
+    return str_concat(out, "\"");
+}
+
+fn c_ident(name: str) -> str { return str_concat("reo_", name); }
+
+fn c_expr(n: i64) -> str {
+    let kind: i64 = nkind(n);
+    if kind == 0 { return str_concat("((int64_t)", str_concat(to_string(na(n)), "LL)")); }
+    if kind == 1 {
+        let name: str = svec_get(names, na(n));
+        if str_eq(name, "true") { return "true"; }
+        if str_eq(name, "false") { return "false"; }
+        return name;
+    }
+    if kind == 2 {
+        if na(n) == 2 { return str_concat("(-", str_concat(c_expr(nb(n)), ")")); }
+        return str_concat("(!", str_concat(c_expr(nb(n)), ")"));
+    }
+    if kind == 3 {
+        return str_concat("(", str_concat(c_expr(nb(n)),
+            str_concat(str_concat(" ", op_name(na(n))),
+            str_concat(" ", str_concat(c_expr(nc(n)), ")")))));
+    }
+    if kind == 4 {
+        let callee: i64 = na(n);
+        let name: str = svec_get(names, na(callee));
+        let args: str = "";
+        let i: i64 = 0;
+        while i < nc(n) {
+            if i > 0 { args = str_concat(args, ", "); }
+            args = str_concat(args, c_expr(list_at(nb(n), i)));
+            i += 1;
+        }
+        if str_eq(name, "println") || str_eq(name, "print") {
+            let newline: str = if str_eq(name, "println") { "\\n" } else { "" };
+            if nc(n) == 0 {
+                return str_concat("printf(\"", str_concat(newline, "\")"));
+            }
+            let arg: i64 = list_at(nb(n), 0);
+            let t: i64 = type_expr(arg);
+            if (t == TStr) {
+                return str_concat("printf(\"%s", str_concat(newline,
+                    str_concat("\", (const char*)", str_concat(args, ")"))));
+            }
+            if (t == TChar) {
+                return str_concat("printf(\"%c", str_concat(newline,
+                    str_concat("\", (int)", str_concat(args, ")"))));
+            }
+            if (t == TBool) {
+                return str_concat("printf(\"%d", str_concat(newline,
+                    str_concat("\", (int)", str_concat(args, ")"))));
+            }
+            return str_concat("printf(\"%lld", str_concat(newline,
+                str_concat("\", (long long)", str_concat(args, ")"))));
+        }
+        if str_eq(name, "assert") {
+            return str_concat("((", str_concat(args, ") ? (void)0 : (fprintf(stderr, \"assertion failed\\n\"), exit(1)))"));
+        }
+        return str_concat(c_ident(name), str_concat("(", str_concat(args, ")")));
+    }
+    if kind == 9 {
+        let cond: str = c_expr(na(n));
+        let then_block: i64 = nb(n);
+        let then_expr: str = "0";
+        if nb(then_block) > 0 {
+            let tail: i64 = list_at(na(then_block), nb(then_block) - 1);
+            if nkind(tail) == 14 { then_expr = c_expr(na(tail)); }
+        }
+        let else_expr: str = "0";
+        if nc(n) >= 0 {
+            if nkind(nc(n)) == 9 { else_expr = c_expr(nc(n)); }
+            else if nkind(nc(n)) == 5 && nb(nc(n)) > 0 {
+                let tail2: i64 = list_at(na(nc(n)), nb(nc(n)) - 1);
+                if nkind(tail2) == 14 { else_expr = c_expr(na(tail2)); }
+            }
+        }
+        return str_concat("((", str_concat(cond,
+            str_concat(") ? (", str_concat(then_expr,
+            str_concat(") : (", str_concat(else_expr, "))"))))));
+    }
+    if kind == 15 { return c_escape(svec_get(names, na(n))); }
+    if kind == 16 { return str_concat("((uint8_t)", str_concat(c_escape(svec_get(names, na(n))), ")")); }
+    if kind == 26 {
+        let inner: str = str_concat(c_expr(na(n)), ")");
+        let cast: str = str_concat("((", c_type_node(nb(n)));
+        cast = str_concat(cast, str_concat(")(", inner));
+        cast = str_concat(cast, ")");
+        return cast;
+    }
+    return "0";
+}
+
+fn c_block(n: i64) -> str {
+    let out: str = "{\n";
+    let i: i64 = 0;
+    while i < nb(n) { out = str_concat(out, c_stmt(list_at(na(n), i))); i += 1; }
+    return str_concat(out, "}\n");
+}
+
+fn c_stmt(n: i64) -> str {
+    let kind: i64 = nkind(n);
+    if kind == 5 { return c_block(n); }
+    if kind == 6 {
+        let name: str = svec_get(names, na(n));
+        let ty: str = "int64_t";
+        if nb(n) >= 0 { ty = c_type_node(nb(n)); }
+        if nc(n) >= 0 {
+            if nb(n) < 0 { ty = str_concat("__typeof__(", str_concat(c_expr(nc(n)), ")")); }
+            return str_concat(ty, str_concat(" ", str_concat(name,
+                str_concat(" = ", str_concat(c_expr(nc(n)), ";\n")))));
+        }
+        return str_concat(ty, str_concat(" ", str_concat(name, ";\n")));
+    }
+    if kind == 7 {
+        if na(n) < 0 { return "return;\n"; }
+        return str_concat("return ", str_concat(c_expr(na(n)), ";\n"));
+    }
+    if kind == 8 {
+        if nkind(na(n)) == 5 { return c_block(na(n)); }
+        return str_concat(c_expr(na(n)), ";\n");
+    }
+    if kind == 9 {
+        let out: str = str_concat("if (", str_concat(c_expr(na(n)), ") "));
+        out = str_concat(out, c_block(nb(n)));
+        if nc(n) >= 0 {
+            out = str_concat(out, "else ");
+            if nkind(nc(n)) == 9 { out = str_concat(out, c_stmt(nc(n))); }
+            else { out = str_concat(out, c_block(nc(n))); }
+        }
+        return out;
+    }
+    if kind == 14 { return str_concat("return ", str_concat(c_expr(na(n)), ";\n")); }
+    if kind == 17 {
+        let op: str = "=";
+        if nb(n) == 1 { op = "+="; }
+        else if nb(n) == 2 { op = "-="; }
+        return str_concat(svec_get(names, na(n)),
+            str_concat(str_concat(" ", op), str_concat(" ", str_concat(c_expr(nc(n)), ";\n"))));
+    }
+    if kind == 18 {
+        return str_concat("while (", str_concat(c_expr(na(n)),
+            str_concat(") ", c_block(nb(n)))));
+    }
+    if kind == 24 { return "break;\n"; }
+    if kind == 25 { return "continue;\n"; }
+    return "";
+}
+
+fn c_params(n: i64) -> str {
+    let params: str = "";
+    let i: i64 = 0;
+    while i < nc(n) {
+        let param: i64 = list_at(nb(n), i);
+        if i > 0 { params = str_concat(params, ", "); }
+        params = str_concat(params, c_type_node(nb(param)));
+        params = str_concat(params, " ");
+        params = str_concat(params, svec_get(names, na(param)));
+        i += 1;
+    }
+    if str_len(params) == 0 { params = "void"; }
+    return params;
+}
+
+fn c_function(n: i64) -> str {
+    let ret: str = c_type_node(nd(n));
+    let name: str = c_ident(svec_get(names, na(n)));
+    return str_concat(ret, str_concat(" ", str_concat(name,
+        str_concat("(", str_concat(c_params(n), str_concat(") ",
+        c_block(ne(n))))))));
+}
+
+fn c_prelude() -> str {
+    return "#include <stdint.h>\n#include <stdbool.h>\n#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n\n";
+}
+
+fn emit_c(program: i64) -> str {
+    let out: str = c_prelude();
+    let i: i64 = 0;
+    while i < nb(program) {
+        let decl: i64 = list_at(na(program), i);
+        if nkind(decl) == 10 {
+            out = str_concat(out, str_concat(c_type_node(nd(decl)),
+                str_concat(" ", str_concat(c_ident(svec_get(names, na(decl))),
+                str_concat("(", str_concat(c_params(decl), ");\n"))))));
+        }
+        i += 1;
+    }
+    i = 0;
+    while i < nb(program) {
+        let decl: i64 = list_at(na(program), i);
+        if nkind(decl) == 10 { out = str_concat(out, c_function(decl)); }
+        i += 1;
+    }
+    let wrapper: str = "int main(void) { reo_main(); return 0; }\n";
+    return str_concat(out, wrapper);
+}

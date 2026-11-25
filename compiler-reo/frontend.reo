@@ -17,6 +17,7 @@
 import "types"
 import "declarations"
 import "type_tests"
+import "codegen"
 
 fn set_name(code: i64) -> i64 { return code; }
 
@@ -975,6 +976,16 @@ fn require_clean(phase: str) {
 
 fn main() {
     if argv_len() > 1 {
+        if argv_len() == 4 && str_eq(argv_get(1), "--emit-c") {
+            reset();
+            let source_text: str = load_with_imports(argv_get(2), 0, svec_new());
+            let program: int64_t = analyze(source_text);
+            require_clean("emit");
+            file_write(argv_get(3), emit_c(program));
+            println("ok");
+            destroy_state();
+            return;
+        }
         if argv_len() == 3 && str_eq(argv_get(1), "--tokens") {
             let source_text: str = file_read(argv_get(2));
             reset();

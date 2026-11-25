@@ -73,6 +73,17 @@ Windows 本地使用 `mingw32-make`、`SHELL="C:/PROGRA~1/Git/bin/sh.exe"`，
   类型检查（依赖模块单独分析仍依赖驱动里的 `at`/`report` 等符号）。
 - 这仍不是 Stage1：没有代码生成、IR、链接，也没有闭合的 Stage1→Stage2。
 
+
+## 2026-11-25 增量：Stage1 种子
+
+- `compiler-reo/codegen.reo` + `frontend --emit-c INPUT OUTPUT` 生成真实 C：
+  函数声明/定义、i64/字符串值、let、if、while、赋值、调用、`println`、`assert`。
+- `tests/stage1/simple.reo`（函数+算术）与 `loop.reo`（while/复合赋值）由 REO
+  前端发射 C，宿主 clang/gcc 编译运行，输出分别为 `5` 和 `6`。
+- `tests/selfhost/test_stage1_emit.py` 固定该链路。
+- 仍不是自举：不支持 struct/union/enum/泛型/指针/数组、模块导入的代码生成、
+  IR、链接和驱动；也不能用 Stage1 编译 `compiler-reo/` 自身。
+
 ## 后续门槛（尚未完成）
 
 1. **完整前端自消费**：补 import/static/属性/初始化/所有表达式语法；前端能
