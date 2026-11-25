@@ -29,7 +29,7 @@ class LayoutAttributeTests(unittest.TestCase):
         self.assertTrue(generated, "compiler kept no generated C")
         text = generated[0].read_text(encoding="utf-8")
         probe = root / "layout_probe.c"
-        probe.write_text(text + "\n" + extra, encoding="utf-8")
+        probe.write_text("#include <stddef.h>\n" + text + "\n" + extra, encoding="utf-8")
         binary = root / ("layout-probe.exe" if os.name == "nt" else "layout-probe")
         result = subprocess.run([CC, "-O2", "-pthread", "-Wno-unused-value",
                                  str(probe), "-o", str(binary)],
