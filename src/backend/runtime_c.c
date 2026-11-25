@@ -78,8 +78,8 @@ void re0_runtime_c_emit(Re0Buffer *out) {
         "static inline uint64_t __reo_read_tsc(void) { return 0; }\n"
         "static inline void __reo_int3(void) { }\n"
         "static inline void __reo_pause(void) { }\n"
-        "static inline void __reo_eprint(const char *s) { (void)s; }\n"
-        "static inline void __reo_eprintln(const char *s) { (void)s; }\n"
+        "static inline void __reo_eprint(const char *s) { if (s) fputs(s, stderr); }\n"
+        "static inline void __reo_eprintln(const char *s) { if (s) fputs(s, stderr); fputc((int)10, stderr); }\n"
         "static inline void __reo_halt_forever(void) { for (;;) { } }\n"
         "#endif\n"
 
