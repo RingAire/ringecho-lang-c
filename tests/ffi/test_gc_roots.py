@@ -25,10 +25,12 @@ fn main() {
     let raw: ptr = alloc(3usize);
     gc_add_root(raw);
     gc_collect();
+    free(raw);
     let text: str = str_concat("a", "b");
     gc_add_root(text as ptr);
     gc_collect();
     println(str_len(text));
+    gc_release(text as ptr);
 }
 """
 

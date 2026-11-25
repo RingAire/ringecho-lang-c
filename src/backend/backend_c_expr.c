@@ -437,6 +437,12 @@ static int c_gen_expr_impl(Re0Codegen *c, Re0Expr *e) {
                         if(t && t->kind==C_STORAGE_SLICE) {
                             re0_buffer_write_str(b,"(__REO_CONV_FREE((");c_gen_expr(c,e->call.args[0]);re0_buffer_write_str(b,").data),0)");break;
                         }
+                        if(strcmp(name,"const char*")==0) {
+                            re0_buffer_write_str(b,"(__reo_gc_free((void*)");
+                            c_gen_expr(c,e->call.args[0]);
+                            re0_buffer_write_str(b,"), 0)");
+                            break;
+                        }
                     }
                     re0_buffer_write_str(b,"(__REO_CONV_FREE((void*)");goto gen1;
                 }

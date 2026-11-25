@@ -74,8 +74,8 @@ class DeclarationTests(unittest.TestCase):
 
     def test_definition_metadata_and_static_literals_survive_codegen(self):
         generated = self.generated()
-        self.assertIn('section(".boot.header"), used', generated)
-        self.assertIn('section(".text.hook"), weak', generated)
+        self.assertIn('__REO_SECTION(".boot.header", "__DATA", "boot_header"), used', generated)
+        self.assertIn('__REO_SECTION(".text.hook", "__TEXT", "text_hook"), weak', generated)
         self.assertNotIn('__reo_globals_ctor', generated)
         self.assertIn('.data = {', generated)
 

@@ -278,13 +278,14 @@ void re0_runtime_c_emit(Re0Buffer *out) {
         "    }\n"
         "}\n"
         "static void __reo_gc_collect(void) {\n"
+        "    if (__reo_gc.mode == 0) return;\n"
         "    pthread_mutex_lock(&__reo_gc_mtx);\n"
         "    __reo_gc_sweep();\n"
         "    pthread_mutex_unlock(&__reo_gc_mtx);\n"
         "}\n"
         "static int64_t __reo_gc_stats(void) {\n"
         "    pthread_mutex_lock(&__reo_gc_mtx);\n"
-        "    int64_t ret = (int64_t)__reo_gc.total_count;\n"
+        "    int64_t ret = (__reo_gc.mode == 0) ? 0 : (int64_t)__reo_gc.total_count;\n"
         "    pthread_mutex_unlock(&__reo_gc_mtx);\n"
         "    return ret;\n"
         "}\n"
@@ -292,7 +293,6 @@ void re0_runtime_c_emit(Re0Buffer *out) {
         "static void __reo_gc_remove_root(void *p) { __reo_gc_release(p); }\n"
         "static void *__reo_gc_try_alloc(size_t sz) {\n"
         "    if (sz == 0) return NULL;\n"
-        "    if (__reo_gc.mode == 0) return malloc(sz);\n"
         "    __reo_gc_node_t *n = (__reo_gc_node_t*)calloc(1, sizeof(__reo_gc_node_t));\n"
         "    if (!n) return NULL;\n"
         "    n->ptr = malloc(sz);\n"
@@ -317,8 +317,7 @@ void re0_runtime_c_emit(Re0Buffer *out) {
         "    __reo_gc_node_t *n = __reo_gc_find_locked(p);\n"
         "    bool tracked = n != NULL;\n"
         "    pthread_mutex_unlock(&__reo_gc_mtx);\n"
-        "    if (tracked) { __reo_gc_release(p); return; }\n"
-        "    if (__reo_gc.mode == 0) free(p);\n"
+        "    if (tracked) __reo_gc_release(p);\n"
         "}\n\n");
     re0_buffer_write_str(out,
     /* spawn/await concurrency runtime (pthread phase 0) */

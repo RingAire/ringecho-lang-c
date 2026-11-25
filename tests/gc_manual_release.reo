@@ -19,6 +19,6 @@ fn main() {
     gc_add_root(r as ptr);
     gc_remove_root(r as ptr);
     assert(gc_stats() == 1i64);
-    free(r as ptr);
+    free(r);
     assert(gc_stats() == 0i64);
 }
