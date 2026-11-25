@@ -6,7 +6,7 @@ void re0_runtime_conversion_emit(Re0Buffer *out) {
         "#ifndef __REO_CONV_ALLOC\n"
         "#define __REO_CONV_ALLOC __reo_gc_try_alloc\n"
         "#endif\n"
-        "#ifndef __REO_CONV_FREE\n#define __REO_CONV_FREE __reo_gc_free\n#endif\n"
+        "#ifndef __REO_CONV_FREE\n#define __REO_CONV_FREE free\n#endif\n"
         "#include <errno.h>\n"
         "#include <float.h>\n"
         "#include <limits.h>\n"
