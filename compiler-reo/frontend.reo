@@ -262,6 +262,11 @@ fn parse_factor() -> i64 {
 
 fn parse_expr(min_precedence: i64) -> i64 {
     let left: i64 = parse_factor();
+    while at("as") {
+        pos += 1;
+        let target: i64 = parse_type();
+        left = node(26, left, target, -1, -1, -1);
+    }
     while pos < token_count() {
         let op: str = tok_text(pos);
         let precedence: i64 = precedence_of(op);
@@ -293,6 +298,16 @@ fn parse_block() -> i64 {
 }
 
 fn parse_stmt() -> i64 {
+    if at("break") {
+        pos += 1;
+        if at(";") { pos += 1; }
+        return node(24, -1, -1, -1, -1, -1);
+    }
+    if at("continue") {
+        pos += 1;
+        if at(";") { pos += 1; }
+        return node(25, -1, -1, -1, -1, -1);
+    }
     if at("let") {        pos += 1;
         let name_index: i64 = intern(tok_text(pos));
         pos += 1;
@@ -579,6 +594,7 @@ fn assign_op(code: i64) -> str {
  * visibility without changing ids or retaining borrowed container pointers. */
 static sym_name: svec;
 static sym_kind: vec;
+static sym_type: vec;
 static scope_start: vec;
 static active_symbols: vec;
 fn scope_enter() { vec_push(scope_start, vec_len(active_symbols)); }
@@ -586,7 +602,7 @@ fn scope_exit() {
     let start: i64 = vec_pop(scope_start);
     while vec_len(active_symbols) > start { vec_pop(active_symbols); }
 }
-fn declare(name: str, kind: i64) {
+fn declare_t(name: str, kind: i64, type_code: i64) {
     let i: i64 = vec_get(scope_start, vec_len(scope_start) - 1);
     while i < vec_len(active_symbols) {
         let symbol: i64 = vec_get(active_symbols, i);
@@ -599,11 +615,14 @@ fn declare(name: str, kind: i64) {
     vec_push(active_symbols, svec_len(sym_name));
     svec_push(sym_name, name);
     vec_push(sym_kind, kind);
+    vec_push(sym_type, type_code);
 }
+fn declare(name: str, kind: i64) { declare_t(name, kind, TAny); }
 fn declare_builtin(name: str) {
     vec_push(active_symbols, svec_len(sym_name));
     svec_push(sym_name, name);
     vec_push(sym_kind, 0);
+    vec_push(sym_type, TAny);
 }
 fn builtins() {
     declare_builtin("print"); declare_builtin("println"); declare_builtin("panic");
@@ -636,9 +655,12 @@ fn declared(name: str) -> bool {
 fn resolve_expr(n: i64) {
     let kind: i64 = nkind(n);
     if kind == 1 {
-        if !declared(svec_get(names, na(n))) {
-            report(str_concat("unresolved name: ", svec_get(names, na(n))));
+        let name: str = svec_get(names, na(n));
+        if !str_eq(name, "true") && !str_eq(name, "false") && !declared(name) {
+            report(str_concat("unresolved name: ", name));
         }
+    } else if kind == 26 {
+        resolve_expr(na(n));
     } else if kind == 2 {
         resolve_expr(nb(n));
     } else if kind == 3 {
@@ -662,7 +684,9 @@ fn resolve_stmt(n: i64) {
     if kind == 5 { resolve_block(n); return; }
     if kind == 6 {
         if nc(n) >= 0 { resolve_expr(nc(n)); }
-        declare(svec_get(names, na(n)), 2);
+        let declared_type: i64 = TAny;
+        if nb(n) >= 0 { declared_type = na(nb(n)); }
+        declare_t(svec_get(names, na(n)), 2, declared_type);
     } else if kind == 7 {
         if na(n) >= 0 { resolve_expr(na(n)); }
     } else if kind == 8 {
@@ -679,6 +703,8 @@ fn resolve_stmt(n: i64) {
         resolve_expr(nc(n));
     } else if kind == 18 {
         resolve_expr(na(n)); resolve_block(nb(n));
+    } else if kind == 24 || kind == 25 {
+        return;
     }
 }
 fn resolve_program(program: i64) {
@@ -687,14 +713,22 @@ fn resolve_program(program: i64) {
     let i: i64 = 0;
     while i < nb(program) {
         let decl: i64 = list_at(na(program), i);
-        if nkind(decl) == 19 {
+        if nkind(decl) == 23 {
+            /* import: no symbol */
+        } else if nkind(decl) == 19 {
             let v: i64 = 0;
             while v < nc(decl) {
                 declare(svec_get(names, list_at(nb(decl), v)), 3);
                 v += 1;
             }
         } else if nkind(decl) == 10 {
-            declare(svec_get(names, na(decl)), 0);
+            let ret: i64 = TUnit;
+            if nd(decl) >= 0 { ret = na(nd(decl)); }
+            declare_t(svec_get(names, na(decl)), 0, ret);
+        } else if nkind(decl) == 22 {
+            let static_type: i64 = TAny;
+            if nb(decl) >= 0 { static_type = na(nb(decl)); }
+            declare_t(svec_get(names, na(decl)), 4, static_type);
         } else {
             declare(svec_get(names, na(decl)), 4);
         }
@@ -708,7 +742,9 @@ fn resolve_program(program: i64) {
             let p: i64 = 0;
             while p < nc(fn_node) {
                 let param: i64 = list_at(nb(fn_node), p);
-                declare(svec_get(names, na(param)), 1);
+                let param_type: i64 = TAny;
+                if nb(param) >= 0 { param_type = na(nb(param)); }
+                declare_t(svec_get(names, na(param)), 1, param_type);
                 p += 1;
             }
             resolve_block(ne(fn_node));
@@ -721,14 +757,25 @@ fn resolve_program(program: i64) {
 
 /* ── initial type checking ── */
 fn numeric(code: i64) -> bool { return code >= TI8 && code <= TUsize; }
+fn block_value_type(block: i64) -> i64 {
+    if nb(block) == 0 { return TUnit; }
+    let last: i64 = list_at(na(block), nb(block) - 1);
+    if nkind(last) == 14 { return type_expr(na(last)); }
+    return TUnit;
+}
 fn type_expr(n: i64) -> i64 {
     let kind: i64 = nkind(n);
     if kind == 0 { set_type(n, TI64); return TI64; }
     if kind == 1 {
+        let name: str = svec_get(names, na(n));
+        if str_eq(name, "true") || str_eq(name, "false") {
+            set_type(n, TBool);
+            return TBool;
+        }
         let i: i64 = 0;
         while i < svec_len(sym_name) {
             if str_eq(svec_get(sym_name, i), svec_get(names, na(n))) {
-                let t: i64 = if vec_get(sym_kind, i) == 0 { TI64 } else { TI64 };
+                let t: i64 = vec_get(sym_type, i);
                 set_type(n, t); return t;
             }
             i += 1;
@@ -749,6 +796,21 @@ fn type_expr(n: i64) -> i64 {
     if kind == 4 {
         set_type(n, TAny); return TAny;
     }
+    if kind == 26 {
+        let target: i64 = nb(n);
+        set_type(n, target);
+        return target;
+    }
+    if kind == 9 {
+        let then_type: i64 = block_value_type(nb(n));
+        if nc(n) >= 0 && (then_type == TUnit) {
+            let else_type: i64 = type_expr(nc(n));
+            set_type(n, else_type);
+            return else_type;
+        }
+        set_type(n, then_type);
+        return then_type;
+    }
     if kind == 15 { set_type(n, TStr); return TStr; }
     if kind == 16 { set_type(n, TChar); return TChar; }
     set_type(n, TUnit); return TUnit;
@@ -763,7 +825,7 @@ fn check_stmt(n: i64, ret: i64) {
                 let got: i64 = type_expr(nc(n));
                 if want != got && !(numeric(want) && numeric(got)) &&
                    want != TAny && got != TAny && want != (TNamed) && got != (TNamed) {
-                    report("let initializer type mismatch");
+                    report(str_concat("let initializer type mismatch: ", svec_get(names, na(n))));
                 }
             }
         } else if nc(n) >= 0 {
@@ -786,6 +848,8 @@ fn check_stmt(n: i64, ret: i64) {
         let wt: i64 = type_expr(na(n));
         if wt != TBool && wt != (TUnit) && wt != (TAny) { report("while condition must be bool"); }
         check_block(nb(n), ret);
+    } else if kind == 24 || kind == 25 {
+        return;
     }
 }
 fn check_block(n: i64, ret: i64) {
@@ -811,19 +875,76 @@ fn destroy_state() {
     if !state_ready { return; }
     free(tkind); free(ttext); free(toff); free(tlen);
     free(nodes); free(names); free(items); free(types);
-    free(errors); free(sym_name); free(sym_kind); free(scope_start); free(active_symbols);
+    free(errors); free(sym_name); free(sym_kind); free(sym_type); free(scope_start); free(active_symbols);
     state_ready = false;
 }
 fn reset() {
     destroy_state();
     tkind = svec_new(); ttext = svec_new(); toff = vec_new(); tlen = vec_new();
     nodes = vec_new(); names = svec_new(); items = vec_new(); types = vec_new();
-    errors = svec_new(); sym_name = svec_new(); sym_kind = vec_new();
+    errors = svec_new(); sym_name = svec_new(); sym_kind = vec_new(); sym_type = vec_new();
     active_symbols = vec_new();
     scope_start = vec_new(); vec_push(scope_start, 0);
     error_count = 0; pos = 0;
     state_ready = true;
 }
+fn dir_of(path: str) -> str {
+    let i: i64 = str_len(path);
+    while i > 0 {
+        i -= 1;
+        let c: char = str_char_at(path, i);
+        if c == '/' || c == '\\' {
+            return str_slice(path, 0, i + 1);
+        }
+    }
+    return "";
+}
+
+fn module_seen(visited: svec, path: str) -> bool {
+    let i: i64 = 0;
+    while i < svec_len(visited) {
+        if str_eq(svec_get(visited, i), path) { return true; }
+        i += 1;
+    }
+    return false;
+}
+
+fn load_with_imports(path: str, depth: i64, visited: svec) -> str {
+    if depth > 16 {
+        report("import depth limit exceeded");
+        return "";
+    }
+    if module_seen(visited, path) { return ""; }
+    let text: str = file_read(path);
+    if str_len(text) == 0 {
+        report(str_concat("cannot read import: ", path));
+        return "";
+    }
+    svec_push(visited, path);
+    scan(text);
+    let imports: svec = svec_new();
+    let i: i64 = 0;
+    while i < token_count() {
+        if str_eq(tok_text(i), "import") && i + 1 < token_count() &&
+           str_eq(tok_kind(i + 1), "Str") {
+            svec_push(imports, tok_text(i + 1));
+        }
+        i += 1;
+    }
+    let dependencies: str = "";
+    let j: i64 = 0;
+    while j < svec_len(imports) {
+        let dependency: str = str_concat(dir_of(path),
+            str_concat(svec_get(imports, j), ".reo"));
+        dependencies = str_concat(dependencies,
+            str_concat(load_with_imports(dependency, depth + 1, visited), "
+"));
+        j += 1;
+    }
+    svec_free(imports);
+    return str_concat(dependencies, text);
+}
+
 fn analyze(text: str) -> i64 {
     reset();
     source = text; scan(text);
@@ -881,7 +1002,8 @@ fn main() {
             return;
         }
         if argv_len() == 3 && str_eq(argv_get(1), "--file") {
-            let input: str = file_read(argv_get(2));
+            reset();
+            let input: str = load_with_imports(argv_get(2), 0, svec_new());
             if str_len(input) == 0 {
                 println("empty or unreadable file");
                 exit(2);

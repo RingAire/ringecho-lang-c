@@ -67,8 +67,11 @@ Windows 本地使用 `mingw32-make`、`SHELL="C:/PROGRA~1/Git/bin/sh.exe"`，
   文本、导致字符串内容 `")"` 被当成右括号的问题（改为同时检查 token kind）。
 - `compiler-reo/` 下 **全部 8 个 `.reo` 模块**都能被 REO 前端解析通过；
   `tests/selfhost/test_self_parse.py` 将其固定为回归。
-- 这仍然只是语法自消费：`--file` 的 import 合并、static 符号、if 表达式类型
-  检查尚未完成，Stage1 代码生成也没有开始。
+- `--file` 现在递归跟随 `import`、合并依赖模块，并补齐 static 全局符号、
+  `true`/`false`、`break`/`continue`、`as` 转换和 if 表达式的类型推断；
+  `--file compiler-reo/frontend.reo` 已能完成整个驱动的解析、名字解析和初始
+  类型检查（依赖模块单独分析仍依赖驱动里的 `at`/`report` 等符号）。
+- 这仍不是 Stage1：没有代码生成、IR、链接，也没有闭合的 Stage1→Stage2。
 
 ## 后续门槛（尚未完成）
 

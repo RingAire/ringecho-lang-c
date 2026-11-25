@@ -12,8 +12,10 @@ Stage: seed. Files:
   `while`, assignments, enums, imports, `static` globals, function declarations
   with parameter/return types, a deterministic AST dump, scoped lexical name
   resolution, and initial type checking. `--parse FILE` parses without semantic
-  resolution; every module in this directory parses cleanly. `--file FILE`
-  additionally resolves/checks and is the next bootstrap gate.
+  resolution; every module in this directory parses cleanly. `--file FILE` additionally resolves/checks; it follows `import` edges and
+  `--file compiler-reo/frontend.reo` now resolves and checks the whole driver
+  (including its dependency modules). Dependency modules alone still rely on
+  driver symbols such as `at`/`report` and are not standalone.
 - `state.reo` — shared token/AST storage and resource limits, owned by the driver.
 - `types.reo` — structural pointer/reference/array/slice/tuple/function/generic
   type parsing, canonical printing and identity; no placeholder erasure.

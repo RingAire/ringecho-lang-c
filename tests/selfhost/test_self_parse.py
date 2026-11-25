@@ -38,6 +38,12 @@ class SelfParseTests(unittest.TestCase):
                              f"{module.name}: {result.stdout}{result.stderr}")
             self.assertIn("ok", result.stdout)
 
+    def test_frontend_semantically_consumes_itself(self):
+        result = subprocess.run([str(self.executable), "--file", "compiler-reo/frontend.reo"],
+                                cwd=ROOT, text=True, capture_output=True, timeout=120)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("ok", result.stdout)
+
     def test_at_does_not_match_string_contents(self):
         """`at(")")` must look at the token kind, not the string's contents."""
         source = self.root / "probe.reo"
