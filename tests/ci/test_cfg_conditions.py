@@ -14,6 +14,13 @@ COMPILER = Path(os.environ.get("REO_TEST_COMPILER",
 
 
 def host_arch() -> str:
+    target = os.environ.get("TARGET_ARCH", "").lower()
+    if target in ("x64", "x86_64"):
+        return "x86_64"
+    if target == "x86":
+        return "x86"
+    if target == "arm64":
+        return "aarch64"
     machine = platform.machine().lower()
     if machine in ("x86_64", "amd64"):
         return "x86_64"
