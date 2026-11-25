@@ -105,6 +105,27 @@ int c_gen_cast(Re0Codegen *c, Re0Expr *e) {
         c->had_error = true;
         return 0;
     }
+    /* Fieldless @repr enums are plain C integers; no conversion runtime is
+     * involved for enum <-> integer casts. */
+    {
+        Re0Type *src_t = e->cast.inner ? e->cast.inner->resolved_type : NULL;
+        Re0Type *dst_t = e->resolved_type;
+        bool src_repr = false, dst_repr = false;
+        if (src_t && src_t->kind == RE0_TYPE_ENUM && src_t->named.name) {
+            Re0EnumDef *def = re0_model_find_enum(c->model, src_t->named.name);
+            src_repr = def && def->repr;
+        }
+        if (dst_t && dst_t->kind == RE0_TYPE_ENUM && dst_t->named.name) {
+            Re0EnumDef *def = re0_model_find_enum(c->model, dst_t->named.name);
+            dst_repr = def && def->repr;
+        }
+        if (src_repr || dst_repr) {
+            re0_buffer_write_fmt(out, "((%s)(", ctype);
+            c_gen_expr(c, e->cast.inner);
+            re0_buffer_write_str(out, "))");
+            return 0;
+        }
+    }
     if (source == RE0_TYPE_UNKNOWN || target > RE0_TYPE_STR) {
         if (e->resolved_type && e->cast.inner->resolved_type &&
             re0_type_equal(e->resolved_type, e->cast.inner->resolved_type))

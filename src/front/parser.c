@@ -912,6 +912,31 @@ static Re0Stmt *parse_struct(Re0Parser *p) {
     expect(p, TK_LBRACE);
     Re0StructFieldDecl *fields = NULL; int field_count = 0; int field_cap = 0;
     while (!check(p, TK_RBRACE) && !re0_stream_eof(p->stream)) {
+        unsigned field_align = 0;
+        if (check(p, TK_AT)) {
+            advance(p);
+            Re0Token attr = expect(p, TK_IDENT);
+            if (!attr.str_val || strcmp(attr.str_val, "align") != 0) {
+                re0_error_append(p->errors, RE0_ERR_SYNTAX, attr.span, NULL,
+                                 "only @align(N) is supported on struct fields");
+                p->had_error = true;
+                break;
+            }
+            expect(p, TK_LPAREN);
+            Re0Token value = expect(p, TK_NUMBER);
+            if (value.kind == TK_ERROR) break;
+            if (value.int_val <= 0 || value.int_val > 4096 ||
+                (value.int_val & (value.int_val - 1)) != 0) {
+                re0_error_append(p->errors, RE0_ERR_SYNTAX, value.span, NULL,
+                                 "invalid field @align(%lld): expected a power of two in 1..4096",
+                                 (long long)value.int_val);
+                p->had_error = true;
+                break;
+            }
+            field_align = (unsigned)value.int_val;
+            expect(p, TK_RPAREN);
+            if (check(p, TK_COMMA)) advance(p);
+        }
         Re0Token fname = expect(p, TK_IDENT);
         if (fname.kind == TK_ERROR) break;
         if (check(p, TK_COLON)) advance(p);
@@ -919,6 +944,7 @@ static Re0Stmt *parse_struct(Re0Parser *p) {
         PARSER_GROW(fields, field_count, field_cap, Re0StructFieldDecl);
         fields[field_count].name = re0_arena_strdup(p->arena, fname.str_val);
         fields[field_count].type = ftype;
+        fields[field_count].align = field_align;
         field_count++;
         if (check(p, TK_COMMA)) advance(p); else break;
     }
@@ -1158,6 +1184,7 @@ static void apply_layout_attribute(Re0Parser *p, const char *name, const char *a
     while (inner && inner->kind == STMT_ATTRIBUTE && depth++ < 64) inner = inner->attribute.inner;
     if (!inner) return;
     bool is_struct = inner->kind == STMT_STRUCT;
+    bool is_enum = inner->kind == STMT_ENUM;
     bool is_decl = inner->kind == STMT_STATIC || inner->kind == STMT_FUNCTION;
     if (strcmp(name, "align") == 0) {
         if (!is_struct && !is_decl) {
@@ -1178,9 +1205,32 @@ static void apply_layout_attribute(Re0Parser *p, const char *name, const char *a
         if (is_struct) inner->struct_decl.explicit_align = (unsigned)v;
         else inner->declaration.align = (unsigned)v;
     } else if (strcmp(name, "repr") == 0) {
+        if (is_enum) {
+            if (!arg) { re0_error_append(p->errors, RE0_ERR_SYNTAX, inner->span, NULL,
+                                         "@repr requires an argument"); p->had_error = true; return; }
+            for (int i = 0; i < inner->enum_decl.variant_count; i++) {
+                if (inner->enum_decl.variants[i].type_count != 0) {
+                    re0_error_append(p->errors, RE0_ERR_SYNTAX, inner->span, NULL,
+                                     "@repr on an enum requires fieldless variants");
+                    p->had_error = true;
+                    return;
+                }
+            }
+            if (strcmp(arg, "C") == 0) inner->enum_decl.repr = 1;
+            else if (strcmp(arg, "u8") == 0) inner->enum_decl.repr = 2;
+            else if (strcmp(arg, "u16") == 0) inner->enum_decl.repr = 3;
+            else if (strcmp(arg, "u32") == 0) inner->enum_decl.repr = 4;
+            else if (strcmp(arg, "u64") == 0) inner->enum_decl.repr = 5;
+            else {
+                re0_error_append(p->errors, RE0_ERR_SYNTAX, inner->span, NULL,
+                                 "unsupported enum @repr(%s): expected C, u8, u16, u32 or u64", arg);
+                p->had_error = true;
+            }
+            return;
+        }
         if (!is_struct) {
             re0_error_append(p->errors, RE0_ERR_SYNTAX, inner->span, NULL,
-                             "@repr requires a struct declaration");
+                             "@repr requires a struct or enum declaration");
             p->had_error = true;
             return;
         }
@@ -1205,7 +1255,30 @@ static Re0Stmt *parse_attribute(Re0Parser *p) {
     bool parentheses = check(p, TK_LPAREN);
     if (check(p, TK_LPAREN)) { advance(p);
         if (peek(p) && peek(p)->kind == TK_IDENT) {
-            arg = re0_arena_strdup(p->arena, peek(p)->str_val); advance(p);
+            const char *key = peek(p)->str_val;
+            advance(p);
+            if (check(p, TK_EQUAL)) {
+                advance(p);
+                const char *value = NULL;
+                char number[32];
+                bool value_is_string = false;
+                if (peek(p) && peek(p)->kind == TK_STRING) {
+                    value = peek(p)->str_val; value_is_string = true; advance(p);
+                } else if (peek(p) && peek(p)->kind == TK_IDENT) {
+                    value = peek(p)->str_val; advance(p);
+                } else if (peek(p) && peek(p)->kind == TK_NUMBER) {
+                    snprintf(number, sizeof(number), "%lld", (long long)peek(p)->int_val);
+                    value = number; advance(p);
+                }
+                if (value) {
+                    char combined[256];
+                    snprintf(combined, sizeof(combined), "%s=%s", key, value);
+                    arg = re0_arena_strdup(p->arena, combined);
+                    string_argument = value_is_string;
+                }
+            } else {
+                arg = re0_arena_strdup(p->arena, key);
+            }
         } else if (peek(p) && peek(p)->kind == TK_STRING) {
             arg = re0_arena_strdup(p->arena, peek(p)->str_val);
             string_argument = true; advance(p);

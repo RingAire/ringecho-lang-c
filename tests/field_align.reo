@@ -1,0 +1,12 @@
+struct Mixed {
+    @align(16)
+    a: u8,
+    b: u32,
+}
+
+fn main() {
+    assert(sizeof<Mixed>() == 16usize);
+    assert(offsetof<Mixed>("a") == 0usize);
+    assert(offsetof<Mixed>("b") == 4usize);
+    println("ok");
+}

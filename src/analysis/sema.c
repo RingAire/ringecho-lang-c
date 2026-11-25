@@ -98,6 +98,7 @@ static void register_enum_declaration(Re0Sema *s, Re0Stmt *stmt) {
     }
     re0_model_register_enum(s->model, stmt->enum_decl.name, names, payloads, count);
     Re0EnumDef *def = re0_model_find_enum(s->model, stmt->enum_decl.name);
+    if (def) def->repr = stmt->enum_decl.repr;
     for (int i = 0; def && i < count; i++) {
         if (!re0_model_set_enum_payload(def, i, stmt->enum_decl.variants[i].types,
                                         stmt->enum_decl.variants[i].type_count)) {
@@ -1204,8 +1205,19 @@ static Re0Type *infer_type_impl(Re0Sema *s, Re0Expr *e) {
                 bool s_int_like = s_num || sk == RE0_TYPE_BOOL || sk == RE0_TYPE_CHAR;
                 bool d_int_like = d_num || dk == RE0_TYPE_BOOL || dk == RE0_TYPE_CHAR;
 
+                bool s_repr_enum = false, d_repr_enum = false;
+                if (sk == RE0_TYPE_ENUM && src && src->named.name) {
+                    Re0EnumDef *def = re0_model_find_enum(s->model, src->named.name);
+                    s_repr_enum = def && def->repr;
+                }
+                if (dk == RE0_TYPE_ENUM && target && target->named.name) {
+                    Re0EnumDef *def = re0_model_find_enum(s->model, target->named.name);
+                    d_repr_enum = def && def->repr;
+                }
                 bool legal = re0_type_equal(src, target)
                           || (s_num && d_num)                        /* numeric <-> numeric */
+                          || (s_repr_enum && d_int_like)
+                          || (s_int_like && d_repr_enum)
                           || (s_int_like && d_int_like)              /* bool/char <-> integer */
                           || (sk == RE0_TYPE_STR && d_int_like)           /* str -> numeric */
                           || (s_int_like && dk == RE0_TYPE_STR)           /* numeric -> str */

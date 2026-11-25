@@ -56,7 +56,10 @@ static int c_gen_expr_impl(Re0Codegen *c, Re0Expr *e) {
                 Re0EnumDef *def = re0_model_find_enum(c->model, ename);
                 if (def) {
                     int tag = re0_model_variant_tag(def, vname);
-                    re0_buffer_write_fmt(b, "(%s){ .tag = %d }", ename, tag);
+                    if (def->repr)
+                        re0_buffer_write_fmt(b, "((%s)%d)", ename, tag);
+                    else
+                        re0_buffer_write_fmt(b, "(%s){ .tag = %d }", ename, tag);
                     break;
                 }
             }
@@ -666,12 +669,29 @@ static int c_gen_expr_impl(Re0Codegen *c, Re0Expr *e) {
             }
             char subject_type[128] = "int64_t";
             char result_type[128] = "int64_t";
-            if (!is_enum_match)
+            bool repr_enum_match = false;
+            if (is_enum_match) {
+                for (int i = 0; i < e->match_.arm_count; i++) {
+                    Re0Expr *pat = e->match_.arms[i].pat;
+                    char ename[128], vname[128];
+                    if (pat && pat->kind == EXPR_IDENT &&
+                        split_qualified(pat->ident.name, ename, sizeof(ename),
+                                        vname, sizeof(vname))) {
+                        Re0EnumDef *def = re0_model_find_enum(c->model, ename);
+                        if (def && def->repr) {
+                            snprintf(subject_type, sizeof(subject_type), "%s", ename);
+                            repr_enum_match = true;
+                        }
+                        break;
+                    }
+                }
+            } else {
                 infer_expr_c_type(e->match_.scrutinee, subject_type, sizeof(subject_type));
+            }
             infer_expr_c_type(e, result_type, sizeof(result_type));
             bool string_match = strcmp(subject_type, "const char*") == 0;
             re0_buffer_write_fmt(b, "({ %s _s%d = ", subject_type, t);
-            if (is_enum_match) {
+            if (is_enum_match && !repr_enum_match) {
                 re0_buffer_write_char(b, '(');
                 c_gen_expr(c, e->match_.scrutinee);
                 re0_buffer_write_str(b, ").tag");

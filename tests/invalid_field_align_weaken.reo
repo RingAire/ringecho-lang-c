@@ -1,0 +1,5 @@
+struct Bad {
+    @align(1)
+    x: u32,
+}
+fn main() { println(sizeof<Bad>()); }

@@ -190,7 +190,8 @@ static const char *record(const Re0Type *type, bool complete) {
     re0_buffer_free(&key);
     if (!t) return "__reo_invalid_type";
     const char *record_kind = def->kind == STMT_STRUCT && def->struct_decl.is_union ? "union" : "struct";
-    if (!t->state) {
+    bool repr_enum = def->kind == STMT_ENUM && def->enum_decl.repr != 0;
+    if (!t->state && !repr_enum) {
         re0_buffer_write_fmt(&storage.forwards, "typedef %s %s %s;\n", record_kind, t->name, t->name);
         t->state = 1;
     }
@@ -219,9 +220,24 @@ static const char *record(const Re0Type *type, bool complete) {
         Re0StructFieldDecl *fields=def->kind==STMT_STRUCT?def->struct_decl.fields:def->component.state;
         for (int i = 0; i < count; i++) {
             const char *ft = text(fields[i].type, true);
-            re0_buffer_write_fmt(&body, "%s %s; ", ft, fields[i].name);
+            re0_buffer_write_fmt(&body, "%s %s", ft, fields[i].name);
+            if (fields[i].align)
+                re0_buffer_write_fmt(&body, " __attribute__((aligned(%u)))", fields[i].align);
+            re0_buffer_write_str(&body, "; ");
             track_struct_field(t->name, fields[i].name, ft);
         }
+    } else if (def->enum_decl.repr) {
+        const char *base = def->enum_decl.repr == 1 ? "int" :
+                           def->enum_decl.repr == 2 ? "uint8_t" :
+                           def->enum_decl.repr == 3 ? "uint16_t" :
+                           def->enum_decl.repr == 4 ? "uint32_t" : "uint64_t";
+        re0_buffer_free(&body);
+        re0_buffer_write_fmt(&storage.definitions, "typedef %s %s;\n", base, t->name);
+        if (re0_buffer_failed(&storage.definitions))
+            c_storage_fail("cannot allocate enum definition");
+        storage.binding_count = saved;
+        t->state = 3;
+        return t->name;
     } else {
         char union_key[192];snprintf(union_key,sizeof(union_key),"payload:%s",t->name);
         CStorageType *payload=entry(union_key,C_STORAGE_RECORD,NULL);

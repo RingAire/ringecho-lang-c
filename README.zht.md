@@ -99,7 +99,8 @@ rem publish            # 發佈目前套件
 - Match 表達式（整數、浮點、布林、字元、字串內容比對 + 列舉標籤；保留純量結果型別）
 - 管道運算子 `|>`
 - Component 關鍵字
-- 核心屬性：靜態變數/函式的 `@align`、`@no_mangle`/`@export_name`、`@noreturn`；`extern` 連結器變數
+- 核心屬性：靜態變數/函式/欄位的 `@align`、`@no_mangle`/`@export_name`、`@noreturn`；`extern` 連結器變數
+- 佈局/可移植：無負載列舉的 `@repr(C|u8|u16|u32|u64)`、欄位級 `@align`、`@cfg(target_arch=...)`/`@cfg(kernel|hosted|debug_assertions)`
 - for-in 區間 + 字串迭代
 - spawn/await 並行（pthread）
 - GC 引擎：3 種模式（none/auto/manual）× 3 種演算法（tracing/arc-cycle/hybrid）

@@ -52,6 +52,7 @@ void re0_model_register_enum(Re0SemanticModel *m, const char *name,
     if (!m || !name) return;
     if (re0_model_find_enum(m, name)) return; /* avoid duplicate registration */
     Re0EnumDef def;
+    def.repr = 0;
     def.name = strdup(name);
     def.variant_names = (char**)xcalloc((size_t)n, sizeof(char*));
     def.variant_has_payload = (int*)xcalloc((size_t)n, sizeof(int));

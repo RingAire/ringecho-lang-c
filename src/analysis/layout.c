@@ -94,30 +94,39 @@ static bool fields(Re0LayoutManager *m, Re0Layout *t, size_t count) {
 }
 
 static bool append_field(Re0LayoutManager *m, Re0Layout *t, size_t index,
-                         const char *name, Re0Layout *child, bool packed) {
+                         const char *name, Re0Layout *child, bool packed,
+                         unsigned field_align) {
     if (!child || index >= t->field_count) return false;
+    if (field_align && !packed && field_align < child->align) {
+        fail(m, "field @align would weaken the natural alignment"); return false;
+    }
     size_t offset;
-    size_t alignment = packed ? 1 : child->align;
+    size_t alignment = field_align ? field_align : (packed ? 1 : child->align);
     if (!align_up(m, t->size, alignment, &offset)) return false;
     if (child->size > m->target.max_object_size - offset) {
         fail(m, "aggregate size overflow"); return false;
     }
     t->fields[index] = (Re0LayoutField){copy_name(m, name), offset, child};
     t->size = offset + child->size;
-    if (!packed && t->align < child->align) t->align = child->align;
+    if (t->align < alignment) t->align = alignment;
     t->inhabited = t->inhabited && child->inhabited;
     return !m->failed;
 }
 
 static bool append_union_member(Re0LayoutManager *m, Re0Layout *t, size_t index,
-                                const char *name, Re0Layout *child, bool packed) {
+                                const char *name, Re0Layout *child, bool packed,
+                                unsigned field_align) {
     if (!child || !name || index >= t->field_count) return false;
     for (size_t i = 0; i < index; ++i) {
         if (!strcmp(t->fields[i].name, name)) { fail(m, "duplicate union member"); return false; }
     }
+    if (field_align && !packed && field_align < child->align) {
+        fail(m, "field @align would weaken the natural alignment"); return false;
+    }
+    size_t alignment = field_align ? field_align : (packed ? 1 : child->align);
     t->fields[index] = (Re0LayoutField){copy_name(m, name), 0, child};
     if (child->size > t->size) t->size = child->size;
-    if (!packed && child->align > t->align) t->align = child->align;
+    if (alignment > t->align) t->align = alignment;
     t->inhabited = t->inhabited || child->inhabited;
     return !m->failed;
 }
@@ -175,9 +184,10 @@ static Re0Layout *record(Re0LayoutManager *m, const char *name,
         const char *field_name = ast ? ast->struct_decl.fields[i].name : model->fields[i].name;
         Re0Layout *child = ast ? parse(m, ast->struct_decl.fields[i].type, inner, depth + 1) :
                                 resolve(m, model->fields[i].type, inner, depth + 1);
+        unsigned field_align = ast ? ast->struct_decl.fields[i].align : 0;
         if (is_union) {
-            if (!append_union_member(m, t, (size_t)i, field_name, child, packed)) return NULL;
-        } else if (!append_field(m, t, (size_t)i, field_name, child, packed)) return NULL;
+            if (!append_union_member(m, t, (size_t)i, field_name, child, packed, field_align)) return NULL;
+        } else if (!append_field(m, t, (size_t)i, field_name, child, packed, field_align)) return NULL;
     }
     if (transparent) {
         if (count != 1) { fail(m, "@repr(transparent) requires exactly one field"); return NULL; }
@@ -212,6 +222,16 @@ static Re0Layout *enumeration(Re0LayoutManager *m, const char *name,
     Re0Layout *t = node(m, RE0_TYPE_ENUM);
     if (!t) return NULL;
     t->name = copy_name(m, name);
+    int repr = ast ? ast->enum_decl.repr : model ? model->repr : 0;
+    if (repr) {
+        size_t width = repr == 2 ? 1 : repr == 3 ? 2 : repr == 4 ? 4 :
+                       repr == 5 ? 8 : 4;
+        t->size = width;
+        t->align = repr == 5 ? m->target.int64_align : width;
+        t->allocation_size = width;
+        t->inhabited = true;
+        return t;
+    }
     if (count) {
         t->variants = calloc(count, sizeof(*t->variants));
         if (!t->variants) { fail(m, "out of memory allocating variants"); return NULL; }
@@ -238,7 +258,7 @@ static Re0Layout *enumeration(Re0LayoutManager *m, const char *name,
             else if (arg_count) child = resolve(m, args[option ? 0 : i], env, depth + 1);
             else child = parse(m, "i64", env, depth + 1);
             char index[32]; snprintf(index, sizeof(index), "%zu", j);
-            if (!append_field(m, payload, j, index, child, false)) return NULL;
+            if (!append_field(m, payload, j, index, child, false, 0)) return NULL;
         }
         if (!align_up(m, payload->size, payload->align, &payload->size)) return NULL;
         if (payload_size < payload->size) payload_size = payload->size;
@@ -288,8 +308,8 @@ static Re0Layout *resolve(Re0LayoutManager *m, const Re0Type *type, const Bindin
             Re0Type integer={.kind=RE0_TYPE_I64};
             Re0Layout *tag=resolve(m,&integer,env,depth+1);
             Re0Layout *value=resolve(m,type->generic.args[0],env,depth+1);
-            if(!append_field(m,result,0,"tag",tag,false) || !append_field(m,result,1,"value",value,false) ||
-               !append_field(m,result,2,"error",tag,false) || !append_field(m,result,3,"index",tag,false) ||
+            if(!append_field(m,result,0,"tag",tag,false,0) || !append_field(m,result,1,"value",value,false,0) ||
+               !append_field(m,result,2,"error",tag,false,0) || !append_field(m,result,3,"index",tag,false,0) ||
                !align_up(m,result->size,result->align,&result->size))return NULL;
             result->inhabited=true; /* The failure variant does not require a payload value. */
             return result;
@@ -338,7 +358,7 @@ static Re0Layout *resolve(Re0LayoutManager *m, const Re0Type *type, const Bindin
             if (!fields(m, t, (size_t)type->tuple.count)) return NULL;
             for (int i = 0; i < type->tuple.count; i++) {
                 char index[32]; snprintf(index, sizeof(index), "%d", i);
-                if (!append_field(m, t, (size_t)i, index, resolve(m, type->tuple.elems[i], env, depth + 1), false)) return NULL;
+                if (!append_field(m, t, (size_t)i, index, resolve(m, type->tuple.elems[i], env, depth + 1), false, 0)) return NULL;
             }
             if (!align_up(m, t->size, t->align, &t->size)) return NULL;
             break;

@@ -31,6 +31,8 @@ typedef struct {
     /* Owned declared payload spellings; NULL entry means legacy/core enum. */
     char ***variant_types;
     int *variant_type_counts;
+    /* 0 = tagged union; 1 = C int; 2..5 = u8/u16/u32/u64. */
+    int repr;
 } Re0EnumDef;
 
 /* ── Trait method signature ── */

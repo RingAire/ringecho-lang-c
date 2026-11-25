@@ -1,0 +1,23 @@
+@repr(u8)
+enum Small { A, B, C }
+
+@repr(C)
+enum Plain { X, Y }
+
+fn main() {
+    let a = Small::B;
+    assert((a as i64) == 1i64);
+    assert(sizeof<Small>() == 1usize);
+
+    let v = match a {
+        Small::A => 1,
+        Small::B => 2,
+        _ => 0,
+    };
+    assert(v == 2i64);
+
+    let p = Plain::Y;
+    assert((p as i64) == 1i64);
+    assert(sizeof<Plain>() == 4usize);
+    println("ok");
+}

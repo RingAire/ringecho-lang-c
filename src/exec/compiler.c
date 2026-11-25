@@ -58,32 +58,88 @@ typedef struct {
     CompileCtx    *ctx;
 } StageMgr;
 
-/* Does an @cfg(<arg>) condition match the host we are compiling for? */
-static bool cfg_matches(const char *arg) {
-    if (!arg) return true;
-#if defined(RE0_PLATFORM_WINDOWS)
-    return strcmp(arg, "windows") == 0;
-#elif defined(RE0_PLATFORM_MACOS)
-    return strcmp(arg, "macos") == 0;
-#elif defined(RE0_PLATFORM_LINUX)
-    return strcmp(arg, "linux") == 0;
+/* Does an @cfg(<arg>) condition match the host (or kernel target) we are
+ * compiling for? */
+static const char *host_arch_name(void) {
+#if defined(__x86_64__) || defined(_M_X64)
+    return "x86_64";
+#elif defined(__aarch64__) || defined(_M_ARM64)
+    return "aarch64";
+#elif defined(__i386__) || defined(_M_IX86)
+    return "x86";
+#elif defined(__arm__) || defined(_M_ARM)
+    return "arm";
 #else
-    return true;
+    return "unknown";
 #endif
+}
+
+static const char *kernel_arch_name(const char *target) {
+    if (!target || !*target) return "x86";
+    if (strncmp(target, "x86_64", 6) == 0) return "x86_64";
+    if (strncmp(target, "i386", 4) == 0 || strncmp(target, "i686", 4) == 0) return "x86";
+    if (strncmp(target, "aarch64", 7) == 0) return "aarch64";
+    if (strncmp(target, "arm", 3) == 0) return "arm";
+    return "unknown";
+}
+
+static bool cfg_matches(const char *arg, const char *kernel_target, bool kernel) {
+    if (!arg) return true;
+    if (strcmp(arg, "windows") == 0) {
+#if defined(RE0_PLATFORM_WINDOWS)
+        return true;
+#else
+        return false;
+#endif
+    }
+    if (strcmp(arg, "macos") == 0) {
+#if defined(RE0_PLATFORM_MACOS)
+        return true;
+#else
+        return false;
+#endif
+    }
+    if (strcmp(arg, "linux") == 0) {
+#if defined(RE0_PLATFORM_LINUX)
+        return true;
+#else
+        return false;
+#endif
+    }
+    if (strcmp(arg, "kernel") == 0) return kernel;
+    if (strcmp(arg, "hosted") == 0) return !kernel;
+    if (strcmp(arg, "debug_assertions") == 0) {
+#if defined(NDEBUG)
+        return false;
+#else
+        return true;
+#endif
+    }
+    if (strncmp(arg, "target_arch=", 12) == 0) {
+        const char *arch = kernel ? kernel_arch_name(kernel_target) : host_arch_name();
+        return strcmp(arg + 12, arch) == 0;
+    }
+    return false;
 }
 
 /* Drop top-level declarations guarded by a non-matching @cfg(...). Runs after
  * the workspace merges imports, so it only filters declarations (not imports). */
-static void filter_cfg(Re0StmtVec *stmts) {
+static void filter_cfg(Re0StmtVec *stmts, const char *kernel_target, bool kernel) {
     size_t w = 0;
     for (size_t i = 0; i < stmts->len; i++) {
         Re0Stmt *s = stmts->data[i];
-        if (s && s->kind == STMT_ATTRIBUTE && s->attribute.attr_name &&
-            strcmp(s->attribute.attr_name, "cfg") == 0 &&
-            !cfg_matches(s->attribute.attr_arg)) {
-            continue;
+        Re0Stmt *probe = s;
+        bool drop = false;
+        while (probe && (probe->kind == STMT_ATTRIBUTE || probe->kind == STMT_PUB)) {
+            if (probe->kind == STMT_ATTRIBUTE && probe->attribute.attr_name &&
+                strcmp(probe->attribute.attr_name, "cfg") == 0 &&
+                !cfg_matches(probe->attribute.attr_arg, kernel_target, kernel)) {
+                drop = true;
+                break;
+            }
+            probe = probe->kind == STMT_ATTRIBUTE ? probe->attribute.inner : probe->pub.inner;
         }
-        stmts->data[w++] = s;
+        if (!drop) stmts->data[w++] = s;
     }
     stmts->len = w;
 }
@@ -98,7 +154,7 @@ static bool stage_frontend_run(Re0Manager *m) {
     ctx->stmts = re0_workspace_load(&ws, ctx->path, c->arena, &c->errors,
                                     &c->lexer, &c->parser);
     re0_workspace_free(&ws);
-    filter_cfg(&ctx->stmts);
+    filter_cfg(&ctx->stmts, ctx->comp->build.kernel.target, ctx->comp->build.kernel.enabled);
     re0_manager_emit_event(m, RE0_EV_LEXER_DONE, NULL, NULL);
     if (Re0StmtVec_len(&ctx->stmts) == 0) {
         re0_error_append(&c->errors, RE0_ERR_IO, RE0_SPAN_ZERO, NULL,

@@ -72,10 +72,18 @@ bool re0_declaration_attribute_apply(Re0ErrorList *errors, Re0Span span,
 
     if (strcmp(name, "cfg") == 0) {
         if (!argument || !*argument) return reject(errors, span, "@cfg requires a condition");
-        if (strcmp(argument, "windows") != 0 && strcmp(argument, "macos") != 0 &&
-            strcmp(argument, "linux") != 0)
-            return reject(errors, span, "unsupported @cfg condition (expected windows, macos or linux)");
-        return true;
+        if (strcmp(argument, "windows") == 0 || strcmp(argument, "macos") == 0 ||
+            strcmp(argument, "linux") == 0 || strcmp(argument, "kernel") == 0 ||
+            strcmp(argument, "hosted") == 0 || strcmp(argument, "debug_assertions") == 0)
+            return true;
+        if (strncmp(argument, "target_arch=", 12) == 0) {
+            const char *arch = argument + 12;
+            if (strcmp(arch, "x86") == 0 || strcmp(arch, "x86_64") == 0 ||
+                strcmp(arch, "aarch64") == 0 || strcmp(arch, "arm") == 0)
+                return true;
+            return reject(errors, span, "unsupported target_arch (expected x86, x86_64, aarch64 or arm)");
+        }
+        return reject(errors, span, "unsupported @cfg condition");
     }
 
     if (strcmp(name, "gc") == 0) {

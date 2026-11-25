@@ -101,7 +101,16 @@ Kernel-facing declaration attributes:
 - `@noreturn` marks a function that never returns (panic/halt); `never` return
   types imply the same attribute.
 - `extern { static symbol: T; }` declares storage provided by a linker script
-  or an external object. It emits `extern <ctype> symbol;` and can be used as an
+  or an external object.
+- `@repr(C|u8|u16|u32|u64)` on a fieldless enum turns it into a plain C integer
+  typedef (`int`, `uint8_t`, ...) instead of the tagged union; casts to/from
+  integers and `match` use the integer value. Enums with payloads reject it.
+- `@align(N)` may prefix a struct field; the layout manager and generated C both
+  honour it, and an alignment weaker than the field's natural one is rejected.
+- `@cfg(target_arch="x86|x86_64|aarch64|arm")`, `@cfg(kernel)`, `@cfg(hosted)`
+  and `@cfg(debug_assertions)` select declarations for the actual build target;
+  `target_arch` follows `--kernel-target` for kernel builds and the host for
+  hosted builds. It emits `extern <ctype> symbol;` and can be used as an
   lvalue or with `&symbol`; the native backend rejects external variables.
 
 `@repr(transparent)` with 0 or >1 fields, packed+transparent, unknown

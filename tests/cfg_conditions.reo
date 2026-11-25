@@ -1,0 +1,14 @@
+@cfg(hosted)
+fn mode() -> i64 {
+    return 1;
+}
+
+@cfg(kernel)
+fn mode() -> i64 {
+    return 2;
+}
+
+fn main() {
+    assert(mode() == 1i64);
+    println("ok");
+}

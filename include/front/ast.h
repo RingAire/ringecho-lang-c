@@ -90,7 +90,7 @@ VEC_DECLARE(Re0ExprVec, Re0Expr*)
 
 typedef struct { char *name; char *ptype; } Re0FnParam;
 typedef struct { char *pname; char *ptype; } Re0FnCallParam;
-typedef struct { char *name; char *type; } Re0StructFieldDecl;
+typedef struct { char *name; char *type; unsigned align; } Re0StructFieldDecl;
 typedef struct { char *vname; char **types; int type_count; } Re0EnumVariantDecl;
 typedef struct { char *mname; Re0FnCallParam *params; int param_count; char *ret_type; } Re0TraitMethodDecl;
 typedef struct { char *name; Re0FnCallParam *params; int param_count; char *ret_type; bool variadic;
@@ -118,7 +118,7 @@ struct Re0Stmt {
         struct { char *name; Re0FnParam *params; int param_count; char *ret_type; Re0Stmt **body; int body_count; char **type_params; int type_param_count; bool is_async; } function;
         struct { char *name; Re0StructFieldDecl *fields; int field_count; char **type_params; int type_param_count;
                  bool packed; unsigned explicit_align; bool transparent; bool is_union; } struct_decl;
-        struct { char *name; Re0EnumVariantDecl *variants; int variant_count; } enum_decl;
+        struct { char *name; Re0EnumVariantDecl *variants; int variant_count; int repr; } enum_decl;
         struct { char *name; Re0TraitMethodDecl *methods; int method_count; } trait_decl;
         struct { char *name; char *trait_name; Re0Stmt **methods; int method_count; char **type_params; int type_param_count; } impl;
         struct { char *module; char **items; int item_count; } import;
