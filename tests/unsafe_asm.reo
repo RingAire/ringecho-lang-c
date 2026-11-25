@@ -13,8 +13,8 @@ fn main() {
     let v: u8 = 0u8;
     unsafe {
         v = read_ptr(p);
+        asm("");
     }
     assert(v == 7u8);
-    asm("");
     println("ok");
 }

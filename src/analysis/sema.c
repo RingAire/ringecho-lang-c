@@ -1362,12 +1362,19 @@ static void check_stmt_impl(Re0Sema *s, Re0Stmt *stmt) {
         case STMT_UNSAFE: {
             Re0Scope *saved = s->current_scope;
             s->current_scope = re0_sema_open_scope(s, s->current_scope);
+            s->unsafe_depth++;
             for (int i = 0; i < stmt->unsafe_block.body_count; i++)
                 check_stmt_inner(s, stmt->unsafe_block.body[i]);
+            s->unsafe_depth--;
             s->current_scope = saved;
             break;
         }
         case STMT_ASM:
+            if (s->unsafe_depth == 0) {
+                re0_error_append(s->errors, RE0_ERR_SEMANTIC, stmt->span, NULL,
+                                 "asm(...) requires an unsafe fn or unsafe block");
+                s->had_error = true;
+            }
             break;
         case STMT_LET: {
             /* check for duplicate definition */
@@ -1610,9 +1617,14 @@ static void check_stmt_impl(Re0Sema *s, Re0Stmt *stmt) {
             Re0Type *prev_fn_return = s->current_fn_return;
             s->current_fn_return = ret;
             s->fn_depth++;
+            int prev_unsafe = s->unsafe_depth;
+            if (stmt->function.is_unsafe || stmt->declaration.naked ||
+                stmt->declaration.interrupt)
+                s->unsafe_depth++;
             for (int i = 0; i < stmt->function.body_count; i++)
                 check_stmt_inner(s, stmt->function.body[i]);
             sema_check_returns(s, stmt, ret);
+            s->unsafe_depth = prev_unsafe;
             s->fn_depth--;
             s->current_fn_return = prev_fn_return;
             s->current_scope = saved;

@@ -32,6 +32,8 @@ typedef struct {
      * released together at destroy time (see re0_type_free). Types may be
      * shared, so this list deduplicates by pointer. */
     Re0TypeVec         owned_types;
+    /* Non-zero inside unsafe fn / unsafe { } / @naked / @interrupt bodies. */
+    int                unsafe_depth;
     /* Machine model used for literal range checks and pointer-width semantics.
      * Defaults to the host; the compiler overrides it with the selected
      * target before checking. */
