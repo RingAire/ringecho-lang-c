@@ -1,0 +1,9 @@
+@section(".reo.test.data")
+@used
+static value: i64 = 42;
+
+@weak
+@section(".reo.test.code")
+fn default_value() -> i64 { return value; }
+
+fn main() { assert(default_value() == 42); }

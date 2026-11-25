@@ -8,42 +8,54 @@
  * AArch64; 8 on ARM EABI. max_object_size is the signed pointer range. */
 const Re0TargetLayout re0_target_x86_64_sysv = {
     "x86_64", 8, 8, 16, 16, (size_t)PTRDIFF_MAX, false,
-    RE0_CC_SYSV64, CC_BIT(RE0_CC_SYSV64) | CC_BIT(RE0_CC_WIN64)
+    RE0_CC_SYSV64, CC_BIT(RE0_CC_SYSV64) | CC_BIT(RE0_CC_WIN64), 8, 8
 };
 const Re0TargetLayout re0_target_x86_64_win64 = {
     "x86_64-windows", 8, 8, 16, 16, (size_t)PTRDIFF_MAX, false,
-    RE0_CC_WIN64, CC_BIT(RE0_CC_SYSV64) | CC_BIT(RE0_CC_WIN64)
+    RE0_CC_WIN64, CC_BIT(RE0_CC_SYSV64) | CC_BIT(RE0_CC_WIN64), 8, 8
 };
 const Re0TargetLayout re0_target_x86_sysv = {
     "x86", 4, 4, 16, 16, (size_t)0x7FFFFFFF, false,
-    RE0_CC_SYSV32, CC_BIT(RE0_CC_SYSV32)
+    RE0_CC_SYSV32, CC_BIT(RE0_CC_SYSV32), 4, 4
 };
 const Re0TargetLayout re0_target_x86_win32 = {
     "x86-windows", 4, 4, 16, 16, (size_t)0x7FFFFFFF, false,
-    RE0_CC_MS32, CC_BIT(RE0_CC_MS32)
+    RE0_CC_MS32, CC_BIT(RE0_CC_MS32), 8, 8
 };
 const Re0TargetLayout re0_target_aarch64_lp64 = {
     "aarch64", 8, 8, 16, 16, (size_t)PTRDIFF_MAX, false,
-    RE0_CC_AAPCS64, CC_BIT(RE0_CC_AAPCS64)
+    RE0_CC_AAPCS64, CC_BIT(RE0_CC_AAPCS64), 8, 8
 };
 const Re0TargetLayout re0_target_aarch64_win64 = {
     "aarch64-windows", 8, 8, 16, 16, (size_t)PTRDIFF_MAX, false,
-    RE0_CC_MSARM64, CC_BIT(RE0_CC_MSARM64)
+    RE0_CC_MSARM64, CC_BIT(RE0_CC_MSARM64), 8, 8
 };
 const Re0TargetLayout re0_target_arm_aapcs = {
     "arm", 4, 4, 8, 8, (size_t)0x7FFFFFFF, false,
-    RE0_CC_AAPCS32, CC_BIT(RE0_CC_AAPCS32)
+    RE0_CC_AAPCS32, CC_BIT(RE0_CC_AAPCS32), 8, 8
 };
 
 const Re0TargetLayout *re0_target_layout_host(void) {
 #if defined(__aarch64__)
+#if defined(_WIN32)
+    return &re0_target_aarch64_win64;
+#else
     return &re0_target_aarch64_lp64;
+#endif
 #elif defined(__arm__)
     return &re0_target_arm_aapcs;
 #elif defined(__x86_64__) || defined(_M_X64)
+#if defined(_WIN32)
+    return &re0_target_x86_64_win64;
+#else
     return &re0_target_x86_64_sysv;
+#endif
 #elif defined(__i386__) || defined(_M_IX86)
+#if defined(_WIN32)
+    return &re0_target_x86_win32;
+#else
     return &re0_target_x86_sysv;
+#endif
 #else
     return &re0_target_x86_64_sysv;
 #endif

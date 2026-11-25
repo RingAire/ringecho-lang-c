@@ -19,9 +19,9 @@ RingEcho 編譯器工具鏈的零依賴 C 實作。
 
 | 項目 | 值 |
 |------|-----|
-| 版本 | 0.3.0 |
+| 版本 | 0.4.0 |
 | 測試 | 通過（make test） |
-| 工具鏈 | 3 個二進位檔：`rev` / `rem` / `rvm` |
+| 工具鏈 | 2 個二進位檔：`rev` / `rem`（`rvm` 為獨立專案） |
 | 後端 | C 原始碼、freestanding C、reo ISA、共享函式庫、WebAssembly (WASI) |
 | 授權 | Apache-2.0 |
 
@@ -36,7 +36,7 @@ RingEcho 編譯器工具鏈的零依賴 C 實作。
 |--------|------|------|
 | `rev` | 編譯器 / 求值器 | 編譯、執行、型別檢查、LSP 伺服器、專案初始化、虛擬環境 |
 | `rem` | 套件管理器 | 安裝 / 列出 / 移除 / 搜尋套件（類 npm） |
-| `rvm` | 版本管理器 | 管理已安裝的 RingEcho 編譯器版本（類 nvm） |
+| `rvm` | 版本管理器（獨立倉庫） | [RingAire/rvm](https://github.com/RingAire/rvm) 安裝已發佈的編譯器版本 |
 
 ## 建置
 
@@ -83,16 +83,11 @@ rem search <query>     # 搜尋套件
 rem publish            # 發佈目前套件
 ```
 
-### rvm — 版本管理器
+### rvm — 版本管理器（獨立專案）
 
-```bash
-rvm install <version>  # 安裝 RingEcho 版本
-rvm use <version>      # 切換版本
-rvm list               # 列出已安裝版本
-rvm current            # 顯示目前版本
-rvm uninstall <ver>    # 解除安裝版本
-rvm remote             # 列出可用版本
-```
+`rvm` 已遷到 [RingAire/rvm](https://github.com/RingAire/rvm)：它從
+`https://ringecho-lang.org/dist`（GitHub Releases 回退）安裝已發佈的編譯器版本，
+獨立版本號、獨立發佈。
 
 ## 特性
 

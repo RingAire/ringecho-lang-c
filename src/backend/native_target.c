@@ -31,6 +31,18 @@ const Re0NativeTarget *re0_native_target_find(const char *triple) {
     return NULL;
 }
 
+const Re0TargetLayout *re0_native_target_layout(const Re0NativeTarget *target) {
+    if (!target) return NULL;
+    bool win = target->os == RE0_OS_WINDOWS;
+    switch (target->arch) {
+        case RE0_ARCH_X86_64: return win ? &re0_target_x86_64_win64 : &re0_target_x86_64_sysv;
+        case RE0_ARCH_X86: return win ? &re0_target_x86_win32 : &re0_target_x86_sysv;
+        case RE0_ARCH_AARCH64: return win ? &re0_target_aarch64_win64 : &re0_target_aarch64_lp64;
+        case RE0_ARCH_ARM: return &re0_target_arm_aapcs;
+    }
+    return NULL;
+}
+
 const Re0NativeTarget *re0_native_target_host(void) {
 #if defined(__APPLE__)
   #if defined(__aarch64__) || defined(__arm64__)

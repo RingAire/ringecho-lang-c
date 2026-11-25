@@ -27,6 +27,8 @@ bool re0_layout_init(Re0LayoutManager *m, const Re0TargetLayout *target,
     if (!target || (target->pointer_size != 4 && target->pointer_size != 8) ||
         !power_two(target->pointer_align) || target->pointer_align > target->pointer_size ||
         !power_two(target->int128_align) || target->int128_align > 16 ||
+        !power_two(target->int64_align) || target->int64_align > 8 ||
+        !power_two(target->float64_align) || target->float64_align > 8 ||
         !target->max_object_size || target->max_object_size > PTRDIFF_MAX) {
         fail(m, "invalid target description"); return false;
     }
@@ -107,6 +109,19 @@ static bool append_field(Re0LayoutManager *m, Re0Layout *t, size_t index,
     return !m->failed;
 }
 
+static bool append_union_member(Re0LayoutManager *m, Re0Layout *t, size_t index,
+                                const char *name, Re0Layout *child, bool packed) {
+    if (!child || !name || index >= t->field_count) return false;
+    for (size_t i = 0; i < index; ++i) {
+        if (!strcmp(t->fields[i].name, name)) { fail(m, "duplicate union member"); return false; }
+    }
+    t->fields[index] = (Re0LayoutField){copy_name(m, name), 0, child};
+    if (child->size > t->size) t->size = child->size;
+    if (!packed && child->align > t->align) t->align = child->align;
+    t->inhabited = t->inhabited || child->inhabited;
+    return !m->failed;
+}
+
 static Re0Stmt *declaration(Re0LayoutManager *m, const char *name, Re0StmtKind kind) {
     if (!m->declarations || !name) return NULL;
     for (size_t i = 0; i < m->declarations->len; i++) {
@@ -148,14 +163,21 @@ static Re0Layout *record(Re0LayoutManager *m, const char *name,
     if (count < 0) { fail(m, "invalid record field count"); return NULL; }
     bool packed = ast ? ast->struct_decl.packed : model ? model->packed : false;
     bool transparent = ast ? ast->struct_decl.transparent : model ? model->transparent : false;
+    bool is_union = ast ? ast->struct_decl.is_union : model ? model->is_union : false;
     unsigned explicit_align = ast ? ast->struct_decl.explicit_align : model ? model->explicit_align : 0;
+    if (is_union && (!count || transparent)) {
+        fail(m, "union must have members and cannot use @repr(transparent)"); return NULL;
+    }
+    if (is_union) t->inhabited = false;
     if (packed && transparent) { fail(m, "@repr(transparent) cannot be combined with @repr(packed)"); return NULL; }
     if (!fields(m, t, (size_t)count)) return NULL;
     for (int i = 0; i < count; i++) {
         const char *field_name = ast ? ast->struct_decl.fields[i].name : model->fields[i].name;
         Re0Layout *child = ast ? parse(m, ast->struct_decl.fields[i].type, inner, depth + 1) :
                                 resolve(m, model->fields[i].type, inner, depth + 1);
-        if (!append_field(m, t, (size_t)i, field_name, child, packed)) return NULL;
+        if (is_union) {
+            if (!append_union_member(m, t, (size_t)i, field_name, child, packed)) return NULL;
+        } else if (!append_field(m, t, (size_t)i, field_name, child, packed)) return NULL;
     }
     if (transparent) {
         if (count != 1) { fail(m, "@repr(transparent) requires exactly one field"); return NULL; }
@@ -225,7 +247,7 @@ static Re0Layout *enumeration(Re0LayoutManager *m, const char *name,
     }
     if (!count) return t;
     /* Stable i64 tag, followed by a maximally aligned payload union. */
-    t->align = payload_align > 8 ? payload_align : 8;
+    t->align = payload_align > m->target.int64_align ? payload_align : m->target.int64_align;
     if (!align_up(m, 8, payload_align, &t->payload_offset) ||
         payload_size > m->target.max_object_size - t->payload_offset) {
         fail(m, "enum size overflow"); return NULL;
@@ -283,7 +305,8 @@ static Re0Layout *resolve(Re0LayoutManager *m, const Re0Type *type, const Bindin
         case RE0_TYPE_I8: case RE0_TYPE_U8: case RE0_TYPE_BOOL: case RE0_TYPE_CHAR: t->size = t->align = 1; break;
         case RE0_TYPE_I16: case RE0_TYPE_U16: t->size = t->align = 2; break;
         case RE0_TYPE_I32: case RE0_TYPE_U32: case RE0_TYPE_F32: t->size = t->align = 4; break;
-        case RE0_TYPE_I64: case RE0_TYPE_U64: case RE0_TYPE_F64: t->size = t->align = 8; break;
+        case RE0_TYPE_I64: case RE0_TYPE_U64: t->size = 8; t->align = m->target.int64_align; break;
+        case RE0_TYPE_F64: t->size = 8; t->align = m->target.float64_align; break;
         case RE0_TYPE_I128: case RE0_TYPE_U128: t->size = 16; t->align = m->target.int128_align; break;
         case RE0_TYPE_ISIZE: case RE0_TYPE_USIZE: case RE0_TYPE_PTR: case RE0_TYPE_REFERENCE:
         case RE0_TYPE_STR: case RE0_TYPE_FN:

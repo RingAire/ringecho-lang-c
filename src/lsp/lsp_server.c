@@ -167,6 +167,8 @@ static bool header_matches(const char *header, const char *name) {
 }
 
 /* ── read one JSON-RPC message ── */
+static bool g_lsp_protocol_error = false;
+
 static char *read_message(size_t *out_len) {
     /* read Content-Length header */
     size_t content_len = 0;
@@ -181,6 +183,7 @@ static char *read_message(size_t *out_len) {
             long cl = atol(header + 15);
             if (cl <= 0 || cl > (long)RE0_MAX_LSP_MESSAGE) {
                 fprintf(stderr, "[lsp] invalid Content-Length '%s'\n", header);
+                g_lsp_protocol_error = true;
                 return NULL; /* unframeable stream: stop */
             }
             content_len = (size_t)cl;
@@ -200,6 +203,7 @@ static char *read_message(size_t *out_len) {
         /* truncated body: EOF mid-message. A partial JSON would produce
          * garbage diagnostics — reject it. */
         free(body);
+        g_lsp_protocol_error = true;
         return NULL;
     }
     body[total] = '\0';
@@ -217,6 +221,7 @@ int lsp_server_run(void) {
 #endif
 
     bool shutdown_req = false;
+    g_lsp_protocol_error = false;
 
     while (!shutdown_req) {
         size_t msg_len = 0;
@@ -278,5 +283,5 @@ int lsp_server_run(void) {
         json_free(msg);
     }
 
-    return 0;
+    return g_lsp_protocol_error ? 1 : 0;
 }

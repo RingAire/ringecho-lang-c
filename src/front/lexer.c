@@ -1,4 +1,5 @@
 #include "base/safe.h"
+#include "base/re0_limits.h"
 #include "front/lexer.h"
 #include <string.h>
 #include <ctype.h>
@@ -77,6 +78,7 @@ static Re0Token make_id(Re0Lexer *l, char *lexeme, Re0Pos start) {
     else if (strcmp(lexeme, "module") == 0) t.kind = TK_KW_MODULE;
     else if (strcmp(lexeme, "pub") == 0) t.kind = TK_KW_PUB;
     else if (strcmp(lexeme, "struct") == 0) t.kind = TK_KW_STRUCT;
+    else if (strcmp(lexeme, "union") == 0) t.kind = TK_KW_UNION;
     else if (strcmp(lexeme, "enum") == 0) t.kind = TK_KW_ENUM;
     else if (strcmp(lexeme, "trait") == 0) t.kind = TK_KW_TRAIT;
     else if (strcmp(lexeme, "impl") == 0) t.kind = TK_KW_IMPL;
@@ -102,12 +104,18 @@ static void skip_line_comment(Re0Lexer *l) {
 }
 
 static void skip_block_comment(Re0Lexer *l) {
+    Re0Pos start = cur_pos(l);
     int depth = 1;
     while (depth > 0 && peek(l)) {
         if (peek(l) == '/' && peek_n(l, 1) == '*') { advance(l); advance(l); depth++; }
         else if (peek(l) == '*' && peek_n(l, 1) == '/') { advance(l); advance(l); depth--; }
         else if (peek(l) == '\n') { l->line++; l->column = 0; l->bol = l->pos + 1; advance(l); }
         else advance(l);
+    }
+    if (depth > 0) {
+        re0_error_append(l->errors, RE0_ERR_SYNTAX, re0_span_make(start, cur_pos(l)),
+                         l->file_path, "unterminated block comment");
+        l->had_error = true;
     }
 }
 
@@ -367,7 +375,31 @@ static Re0Token scan_char(Re0Lexer *l, Re0Pos start) {
     return t;
 }
 
+/* True when the previous token can end an operand. In that position a '-'
+ * followed by digits is subtraction ("a-1"), not a negative literal. */
+static bool previous_token_ends_operand(const Re0Lexer *l) {
+    if (!l || l->stream.tokens.len == 0) return false;
+    Re0TokenKind kind = l->stream.tokens.data[l->stream.tokens.len - 1].kind;
+    switch (kind) {
+        case TK_IDENT:
+        case TK_NUMBER:
+        case TK_FLOAT:
+        case TK_STRING:
+        case TK_CHAR:
+        case TK_KW_TRUE:
+        case TK_KW_FALSE:
+        case TK_KW_SELF:
+        case TK_RPAREN:
+        case TK_RBRACKET:
+        case TK_RBRACE:
+            return true;
+        default:
+            return false;
+    }
+}
+
 static Re0Token scan_token(Re0Lexer *l) {
+    for (;;) {
     skip_whitespace(l);
     if (!peek(l)) return make_token(l, TK_EOF, cur_pos(l));
 
@@ -386,6 +418,15 @@ static Re0Token scan_token(Re0Lexer *l) {
         }
         buf[len++] = c;
         while (is_ident_part(peek(l))) {
+            if (len >= RE0_MAX_IDENTIFIER) {
+                while (is_ident_part(peek(l))) advance(l);
+                re0_error_append(l->errors, RE0_ERR_SYNTAX,
+                                 re0_span_make(start, cur_pos(l)), l->file_path,
+                                 "identifier is longer than %d bytes", RE0_MAX_IDENTIFIER);
+                l->had_error = true;
+                free(buf);
+                return make_token(l, TK_ERROR, start);
+            }
             if (len + 1 >= cap) {
                 cap *= 2;
                 char *next = (char*)xrealloc(buf, cap);
@@ -407,7 +448,7 @@ static Re0Token scan_token(Re0Lexer *l) {
         return t;
     }
 
-    if (is_digit(c) || (c == '-' && is_digit(peek(l)))) {
+    if (is_digit(c) || (c == '-' && is_digit(peek(l)) && !previous_token_ends_operand(l))) {
         if (c == '-') return scan_number(l, start, true, 0);
         return scan_number(l, start, false, c);
     }
@@ -427,7 +468,7 @@ static Re0Token scan_token(Re0Lexer *l) {
             if (peek(l) == '?') { advance(l); l->column++; return make_token(l, TK_DOUBLEQUESTION, start); }
             return make_token(l, TK_QUESTION, start);
         case '@': return make_token(l, TK_AT, start);
-        case '#': { skip_line_comment(l); return scan_token(l); }
+        case '#': { skip_line_comment(l); continue; }
     }
 
     if (c == ':') {
@@ -492,6 +533,7 @@ static Re0Token scan_token(Re0Lexer *l) {
                      l->file_path, "unexpected character '%c'", c);
     l->had_error = true;
     return make_token(l, TK_ERROR, start);
+    }
 }
 
 bool re0_lexer_tokenize(Re0Lexer *l, const char *source, const char *file_path) {

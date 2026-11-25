@@ -1,4 +1,5 @@
 #include "backend/backend_c_internal.h"
+#include "backend/kernel_arithmetic.h"
 
 Re0TypeKind c_expr_scalar_kind(Re0Expr *e) {
     if (e && e->resolved_type && e->resolved_type->kind <= RE0_TYPE_STR)
@@ -94,6 +95,10 @@ int c_gen_cast(Re0Codegen *c, Re0Expr *e) {
     if (e->cast.checked && e->resolved_type && e->resolved_type->kind == RE0_TYPE_GENERIC)
         target = e->resolved_type->generic.args[0]->kind;
     const char *ctype = reo_type_to_c(e->cast.target_type);
+    if (c->kernel && !e->cast.checked && re0_type_is_integer(source) && re0_type_is_integer(target)) {
+        re0_kernel_integer_cast_emit(c, e);
+        return 0;
+    }
     if (c->backend != &re0_backend_c && c->backend != &re0_backend_c_freestanding) {
         re0_error_append(c->errors, RE0_ERR_SEMANTIC, e->span, NULL,
                          "conversion runtime is unavailable for this backend");

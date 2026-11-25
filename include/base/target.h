@@ -23,6 +23,8 @@ typedef struct {
     bool        big_endian;
     Re0CallingConvention default_cc; /* target-default C convention */
     unsigned    supported_cc;        /* bitmask of (1u << Re0CallingConvention) */
+    unsigned    int64_align;          /* not necessarily 8 on 32-bit targets */
+    unsigned    float64_align;
 } Re0TargetLayout;
 
 extern const Re0TargetLayout re0_target_x86_64_sysv;

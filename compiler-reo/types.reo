@@ -1,0 +1,286 @@
+import "state"
+
+/* Structural types in the frontend's flat AST. No host pointers or target
+ * sizes are encoded here. Lists are committed only after nested parses finish.
+ * node.a=kind; pointer/ref: b=pointee,c=mutable,d=volatile;
+ * array: b=element,c=length; tuple: b=list,c=count;
+ * fn: b=params,c=count,d=result; generic: b=name,c=args,d=count. */
+static TUnit: i64 = 0;
+static TNever: i64 = 1;
+static TBool: i64 = 2;
+static TI8: i64 = 3;
+static TI16: i64 = 4;
+static TI32: i64 = 5;
+static TI64: i64 = 6;
+static TI128: i64 = 7;
+static TIsize: i64 = 8;
+static TU8: i64 = 9;
+static TU16: i64 = 10;
+static TU32: i64 = 11;
+static TU64: i64 = 12;
+static TU128: i64 = 13;
+static TUsize: i64 = 14;
+static TF32: i64 = 15;
+static TF64: i64 = 16;
+static TChar: i64 = 17;
+static TStr: i64 = 18;
+static TPtr: i64 = 19;
+static TNamed: i64 = 20;
+static TPointer: i64 = 21;
+static TReference: i64 = 22;
+static TArray: i64 = 23;
+static TSlice: i64 = 24;
+static TTuple: i64 = 25;
+static TFunction: i64 = 26;
+static TGeneric: i64 = 27;
+static TAny: i64 = 88;
+static TInvalid: i64 = 89;
+static TypeDepthLimit: i64 = 64;
+static TypeListLimit: i64 = 64;
+static TypeLengthLimit: i64 = 9223372036854775807;
+
+fn type_code(text: str) -> i64 {
+    if str_eq(text, "unit") { return TUnit; }
+    if str_eq(text, "never") { return TNever; }
+    if str_eq(text, "bool") { return TBool; }
+    if str_eq(text, "i8") { return TI8; }
+    if str_eq(text, "i16") { return TI16; }
+    if str_eq(text, "i32") { return TI32; }
+    if str_eq(text, "i64") { return TI64; }
+    if str_eq(text, "i128") { return TI128; }
+    if str_eq(text, "isize") { return TIsize; }
+    if str_eq(text, "u8") { return TU8; }
+    if str_eq(text, "u16") { return TU16; }
+    if str_eq(text, "u32") { return TU32; }
+    if str_eq(text, "u64") { return TU64; }
+    if str_eq(text, "u128") { return TU128; }
+    if str_eq(text, "usize") { return TUsize; }
+    if str_eq(text, "f32") { return TF32; }
+    if str_eq(text, "f64") { return TF64; }
+    if str_eq(text, "char") { return TChar; }
+    if str_eq(text, "str") { return TStr; }
+    if str_eq(text, "ptr") { return TPtr; }
+    return TNamed;
+}
+
+fn type_expect(text: str) -> bool {
+    if at(text) { pos += 1; return true; }
+    report(str_concat("expected type delimiter: ", text));
+    return false;
+}
+fn invalid_type(message: str) -> i64 {
+    report(message);
+    return node(12, TInvalid, -1, -1, -1, -1);
+}
+fn type_length() -> i64 {
+    if !at_number() { report("expected array length"); return 0; }
+    let text: str = tok_text(pos);
+    pos += 1;
+    let value: i64 = 0;
+    let i: i64 = 0;
+    while i < len(text) {
+        let digit: i64 = str_to_int(str_slice(text, i, i + 1));
+        if value > (TypeLengthLimit - digit) / 10 {
+            report("array length exceeds frontend representation limit");
+            return 0;
+        }
+        value = value * 10 + digit;
+        i += 1;
+    }
+    return value;
+}
+fn parse_type_list(close: str, depth: i64) -> i64 {
+    let collected: vec = vec_new();
+    let count: i64 = 0;
+    while !at(close) && pos < token_count() {
+        if count >= (TypeListLimit) { report("type list limit exceeded"); break; }
+        let before: i64 = pos;
+        vec_push(collected, parse_type_depth(depth));
+        count += 1;
+        if pos == before { break; }
+        if !at(",") { break; }
+        pos += 1;
+    }
+    type_expect(close);
+    let start: i64 = commit_list(collected, count);
+    free(collected);
+    return node(12, TTuple, start, count, -1, -1);
+}
+fn parse_type_depth(depth: i64) -> i64 {
+    if depth >= (TypeDepthLimit) { return invalid_type("type nesting limit exceeded"); }
+    if at("!") { pos += 1; return node(12, TNever, -1, -1, -1, -1); }
+    if at("&") {
+        pos += 1;
+        let mutable: i64 = 0;
+        if at("mut") { pos += 1; mutable = 1; }
+        let inner: i64 = parse_type_depth(depth + 1);
+        return node(12, TReference, inner, mutable, 0, -1);
+    }
+    if at("*") {
+        pos += 1;
+        let mutability: i64 = -1;
+        let volatile_flag: i64 = 0;
+        while at("const") || at("mut") || at("volatile") {
+            if at("volatile") {
+                if volatile_flag != 0 { report("duplicate volatile qualifier"); }
+                volatile_flag = 1;
+            } else {
+                if mutability >= 0 { report("conflicting or duplicate pointer mutability"); }
+                mutability = if at("mut") { 1 } else { 0 };
+            }
+            pos += 1;
+        }
+        if mutability < 0 { mutability = 1; }
+        let pointee: i64 = parse_type_depth(depth + 1);
+        return node(12, TPointer, pointee, mutability, volatile_flag, -1);
+    }
+    if at("[") {
+        pos += 1;
+        let element: i64 = parse_type_depth(depth + 1);
+        let length: i64 = -1;
+        if at(";") { pos += 1; length = type_length(); }
+        type_expect("]");
+        if length < 0 { return node(12, TSlice, element, -1, -1, -1); }
+        return node(12, TArray, element, length, -1, -1);
+    }
+    if at("fn") {
+        pos += 1;
+        if !type_expect("(") { return node(12, TInvalid, -1, -1, -1, -1); }
+        let params: i64 = parse_type_list(")", depth + 1);
+        let result: i64 = node(12, TUnit, -1, -1, -1, -1);
+        if at("->") { pos += 1; result = parse_type_depth(depth + 1); }
+        return node(12, TFunction, nb(params), nc(params), result, -1);
+    }
+    if at("(") {
+        pos += 1;
+        if at(")") { pos += 1; return node(12, TUnit, -1, -1, -1, -1); }
+        let first: i64 = parse_type_depth(depth + 1);
+        if at(")") { pos += 1; return first; }
+        if !type_expect(",") { return node(12, TInvalid, -1, -1, -1, -1); }
+        let rest: i64 = parse_type_list(")", depth + 1);
+        let parts: vec = vec_new();
+        vec_push(parts, first);
+        let j: i64 = 0;
+        while j < nc(rest) { vec_push(parts, list_at(nb(rest), j)); j += 1; }
+        if j + 1 > (TypeListLimit) { report("type list limit exceeded"); }
+        let offset: i64 = commit_list(parts, j + 1);
+        free(parts);
+        return node(12, TTuple, offset, j + 1, -1, -1);
+    }
+    if at_ident() {
+        let text: str = tok_text(pos);
+        pos += 1;
+        let code: i64 = type_code(text);
+        if at("<") {
+            pos += 1;
+            let arguments: i64 = parse_type_list(">", depth + 1);
+            if nc(arguments) == 0 { report("generic type requires arguments"); }
+            if code != (TNamed) { report("primitive type cannot take type arguments"); }
+            return node(12, TGeneric, intern(text), nb(arguments), nc(arguments), -1);
+        }
+        if code == (TNamed) { return node(12, TNamed, intern(text), -1, -1, -1); }
+        return node(12, code, -1, -1, -1, -1);
+    }
+    return invalid_type("expected type");
+}
+fn parse_type() -> i64 { return parse_type_depth(0); }
+
+fn dump_type_list(start: i64, count: i64, depth: i64) -> str {
+    let result: str = "";
+    let i: i64 = 0;
+    while i < count {
+        if i > 0 { result = str_concat(result, ", "); }
+        result = str_concat(result, dump_type_depth(list_at(start, i), depth));
+        i += 1;
+    }
+    return result;
+}
+fn dump_type_depth(t: i64, depth: i64) -> str {
+    if t < 0 { return "unit"; }
+    if depth >= (TypeDepthLimit) { return "<invalid>"; }
+    let code: i64 = na(t);
+    if code == (TNamed) { return svec_get(names, nb(t)); }
+    if code == (TPointer) {
+        let prefix: str = if nc(t) == 1 { "*mut " } else { "*const " };
+        if nd(t) == 1 { prefix = str_concat(prefix, "volatile "); }
+        return str_concat(prefix, dump_type_depth(nb(t), depth + 1));
+    }
+    if code == (TReference) {
+        let prefix: str = if nc(t) == 1 { "&mut " } else { "&" };
+        return str_concat(prefix, dump_type_depth(nb(t), depth + 1));
+    }
+    if code == (TSlice) { return str_concat("[", str_concat(dump_type_depth(nb(t), depth + 1), "]")); }
+    if code == (TArray) {
+        return str_concat("[", str_concat(dump_type_depth(nb(t), depth + 1),
+               str_concat("; ", str_concat(to_string(nc(t)), "]"))));
+    }
+    if code == (TTuple) {
+        let suffix: str = if nc(t) == 1 { ",)" } else { ")" };
+        return str_concat("(", str_concat(dump_type_list(nb(t), nc(t), depth + 1), suffix));
+    }
+    if code == (TFunction) {
+        return str_concat("fn(", str_concat(dump_type_list(nb(t), nc(t), depth + 1),
+               str_concat(") -> ", dump_type_depth(nd(t), depth + 1))));
+    }
+    if code == (TGeneric) {
+        return str_concat(svec_get(names, nb(t)), str_concat("<",
+               str_concat(dump_type_list(nc(t), nd(t), depth + 1), ">")));
+    }
+    return primitive_type_name(code);
+}
+fn primitive_type_name(code: i64) -> str {
+    if code == (TUnit) { return "unit"; }
+    if code == (TNever) { return "never"; }
+    if code == (TBool) { return "bool"; }
+    if code == (TI8) { return "i8"; }
+    if code == (TI16) { return "i16"; }
+    if code == (TI32) { return "i32"; }
+    if code == (TI64) { return "i64"; }
+    if code == (TI128) { return "i128"; }
+    if code == (TIsize) { return "isize"; }
+    if code == (TU8) { return "u8"; }
+    if code == (TU16) { return "u16"; }
+    if code == (TU32) { return "u32"; }
+    if code == (TU64) { return "u64"; }
+    if code == (TU128) { return "u128"; }
+    if code == (TUsize) { return "usize"; }
+    if code == (TF32) { return "f32"; }
+    if code == (TF64) { return "f64"; }
+    if code == (TChar) { return "char"; }
+    if code == (TStr) { return "str"; }
+    if code == (TPtr) { return "ptr"; }
+    return "<invalid>";
+}
+fn dump_type(t: i64) -> str { return dump_type_depth(t, 0); }
+
+fn equal_type_list(a: i64, b: i64, count: i64, depth: i64) -> bool {
+    let i: i64 = 0;
+    while i < count {
+        if !equal_type_depth(list_at(a, i), list_at(b, i), depth) { return false; }
+        i += 1;
+    }
+    return true;
+}
+fn equal_type_depth(a: i64, b: i64, depth: i64) -> bool {
+    if depth >= TypeDepthLimit || a < 0 || b < 0 { return false; }
+    let kind: i64 = na(a);
+    if kind != na(b) || kind == (TInvalid) { return false; }
+    if kind == (TNamed) { return str_eq(svec_get(names, nb(a)), svec_get(names, nb(b))); }
+    if kind == TPointer || kind == (TReference) {
+        return nc(a) == nc(b) && nd(a) == nd(b) && equal_type_depth(nb(a), nb(b), depth + 1);
+    }
+    if kind == TArray || kind == (TSlice) {
+        return nc(a) == nc(b) && equal_type_depth(nb(a), nb(b), depth + 1);
+    }
+    if kind == TTuple || kind == (TFunction) {
+        if nc(a) != nc(b) || !equal_type_list(nb(a), nb(b), nc(a), depth + 1) { return false; }
+        if kind == (TFunction) { return equal_type_depth(nd(a), nd(b), depth + 1); }
+        return true;
+    }
+    if kind == (TGeneric) {
+        return str_eq(svec_get(names, nb(a)), svec_get(names, nb(b))) && nd(a) == nd(b) &&
+               equal_type_list(nc(a), nc(b), nd(a), depth + 1);
+    }
+    return true;
+}
+fn equal_type(a: i64, b: i64) -> bool { return equal_type_depth(a, b, 0); }

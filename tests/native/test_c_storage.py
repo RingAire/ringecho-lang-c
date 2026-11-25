@@ -136,7 +136,7 @@ fn main() {
 
     def test_source_has_no_legacy_implementations(self):
         for path in (ROOT / "src/backend").glob("*.c"):
-            text = path.read_text()
+            text = path.read_text(encoding="utf-8")
             for legacy in LEGACY:
                 self.assertNotIn(legacy, text, str(path))
 

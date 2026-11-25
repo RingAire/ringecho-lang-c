@@ -99,6 +99,8 @@ typedef struct { Re0Expr *cond; Re0Stmt **body; int body_count; } Re0IfBranch;
 
 struct Re0Stmt {
     Re0StmtKind kind; Re0Span span;
+    /* Definition-owned metadata; strings belong to the compiler arena. */
+    struct { const char *section; bool used, weak; } declaration;
     union {
         struct { Re0Expr *expr; } expr_stmt;
         struct { char *name; char *type; Re0Expr *init; } let_stmt;
@@ -113,7 +115,7 @@ struct Re0Stmt {
         struct { Re0Expr *value; } break_stmt;
         struct { char *name; Re0FnParam *params; int param_count; char *ret_type; Re0Stmt **body; int body_count; char **type_params; int type_param_count; bool is_async; } function;
         struct { char *name; Re0StructFieldDecl *fields; int field_count; char **type_params; int type_param_count;
-                 bool packed; unsigned explicit_align; bool transparent; } struct_decl;
+                 bool packed; unsigned explicit_align; bool transparent; bool is_union; } struct_decl;
         struct { char *name; Re0EnumVariantDecl *variants; int variant_count; } enum_decl;
         struct { char *name; Re0TraitMethodDecl *methods; int method_count; } trait_decl;
         struct { char *name; char *trait_name; Re0Stmt **methods; int method_count; char **type_params; int type_param_count; } impl;

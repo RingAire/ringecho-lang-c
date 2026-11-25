@@ -270,7 +270,9 @@ bool re0_type_equal(const Re0Type *a, const Re0Type *b) {
             return a->ref_.mutable_ == b->ref_.mutable_
                 && re0_type_equal(a->ref_.inner, b->ref_.inner);
         case RE0_TYPE_PTR:
-            return a->ptr_.mutable_ == b->ptr_.mutable_ && re0_type_equal(a->ptr_.inner,b->ptr_.inner);
+            return a->ptr_.mutable_ == b->ptr_.mutable_
+                && a->is_volatile == b->is_volatile
+                && re0_type_equal(a->ptr_.inner, b->ptr_.inner);
 
         case RE0_TYPE_FN: {
             if (a->func.param_count != b->func.param_count) return false;
@@ -301,9 +303,9 @@ bool re0_type_equal(const Re0Type *a, const Re0Type *b) {
     return false;
 }
 
-bool re0_type_coercible(const Re0Type *from, const Re0Type *to) {
-    if (re0_type_equal(from, to)) return true;
+bool re0_type_coercible_on(const Re0TargetLayout *layout, const Re0Type *from, const Re0Type *to) {
     if (!from || !to) return false;
+    if (re0_type_equal(from, to)) return true;
     if (from->kind==RE0_TYPE_REFERENCE && to->kind==RE0_TYPE_REFERENCE)
         return (!to->ref_.mutable_ || from->ref_.mutable_) && re0_type_equal(from->ref_.inner,to->ref_.inner);
     if (to->kind==RE0_TYPE_PTR && from->kind==RE0_TYPE_REFERENCE)
@@ -311,16 +313,17 @@ bool re0_type_coercible(const Re0Type *from, const Re0Type *to) {
                (!to->ptr_.inner || !to->ptr_.mutable_ || from->ref_.mutable_);
     if(from->kind==RE0_TYPE_PTR && to->kind==RE0_TYPE_PTR)
         return (!to->ptr_.inner || re0_type_equal(from->ptr_.inner,to->ptr_.inner)) &&
+               (!from->is_volatile || to->is_volatile) &&
                (!to->ptr_.mutable_ || from->ptr_.mutable_);
     /* Only conversions preserving every possible source value are implicit. */
     if (re0_type_is_integer(from->kind) && re0_type_is_integer(to->kind)) {
-        size_t source = re0_type_sizeof(from->kind), target = re0_type_sizeof(to->kind);
+        size_t source = re0_type_sizeof_on(layout, from->kind), target = re0_type_sizeof_on(layout, to->kind);
         bool ss = re0_type_is_signed(from->kind), ts = re0_type_is_signed(to->kind);
         return ss == ts ? target >= source : (!ss && ts && target > source);
     }
     if (from->kind == RE0_TYPE_F32 && to->kind == RE0_TYPE_F64) return true;
     if (re0_type_is_integer(from->kind) && re0_type_is_float(to->kind)) {
-        unsigned significant = (unsigned)re0_type_sizeof(from->kind) * 8 -
+        unsigned significant = (unsigned)re0_type_sizeof_on(layout, from->kind) * 8 -
                                (re0_type_is_signed(from->kind) ? 1U : 0U);
         return significant <= (to->kind == RE0_TYPE_F32 ? 24U : 53U);
     }
@@ -328,6 +331,10 @@ bool re0_type_coercible(const Re0Type *from, const Re0Type *to) {
     if (from->kind == RE0_TYPE_UNKNOWN || to->kind == RE0_TYPE_UNKNOWN)
         return true;
     return false;
+}
+
+bool re0_type_coercible(const Re0Type *from, const Re0Type *to) {
+    return re0_type_coercible_on(NULL, from, to);
 }
 
 static Re0Type *type_parse_depth(const char *s, unsigned depth);
@@ -485,12 +492,30 @@ static Re0Type *type_parse_depth(const char *s, unsigned depth) {
         const char *rest = buf + 1;
         while (*rest == ' ' || *rest == '\t') rest++;
         bool mutable_ = true;
-        if (strncmp(rest, "const ", 6) == 0) { mutable_ = false; rest += 6; }
-        else if (strncmp(rest, "mut ", 4) == 0) rest += 4;
+        bool is_vol = false;
+        bool has_access = false;
+        /* Consume any qualifiers, in any order: `*const T`, `*mut T`,
+         * `*volatile T`, `*mut volatile T`, `*const volatile T`. */
+        for (;;) {
+            size_t word = strcspn(rest, " \t");
+            if (word == 5 && strncmp(rest, "const", word) == 0) {
+                if (has_access) { free(buf); return NULL; }
+                has_access = true; mutable_ = false;
+            } else if (word == 3 && strncmp(rest, "mut", word) == 0) {
+                if (has_access) { free(buf); return NULL; }
+                has_access = true;
+            } else if (word == 8 && strncmp(rest, "volatile", word) == 0) {
+                if (is_vol) { free(buf); return NULL; }
+                is_vol = true;
+            } else break;
+            rest += word;
+            while (*rest == ' ' || *rest == '\t') rest++;
+        }
         Re0Type *inner = type_parse_depth(rest, depth + 1);
         if (!inner) { free(buf); return NULL; }
         Re0Type *pointer = re0_type_make(RE0_TYPE_PTR, NULL);
         pointer->ptr_.inner = inner; pointer->ptr_.mutable_ = mutable_;
+        pointer->is_volatile = is_vol;
         free(buf); return pointer;
     }
     const char *fn_open = NULL;

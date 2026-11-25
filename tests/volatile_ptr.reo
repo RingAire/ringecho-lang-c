@@ -1,0 +1,23 @@
+/* volatile pointer qualifier: `*mut volatile T` / `*const volatile T`.
+ * Models MMIO / device-register access that must not be optimized away. */
+fn main() {
+    let a: [u16; 4] = [0u16, 0u16, 0u16, 0u16];
+    let p: *mut volatile u16 = (&mut a[0]) as *mut volatile u16;
+    *p = 0x1234u16;
+    assert(a[0] == 0x1234u16);
+
+    let q: *const volatile u16 = p;
+    assert(*q == 0x1234u16);
+
+    let r: *mut u16 = p as *mut u16; /* volatile -> plain pointer */
+    assert(*r == 0x1234u16);
+
+    let added: *mut volatile u16 = r;
+    let outer: *mut volatile *mut u16 = (&mut r) as *mut volatile *mut u16;
+    **outer = 0x4567u16;
+    assert(*added == 0x4567u16);
+
+    let inner: *mut *mut volatile u16 = (&mut p) as *mut *mut volatile u16;
+    **inner = 0x789Au16;
+    assert(*q == 0x789Au16);
+}

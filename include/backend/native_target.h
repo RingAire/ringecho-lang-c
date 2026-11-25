@@ -2,6 +2,7 @@
 #define RE0_NATIVE_TARGET_H
 #include <stdbool.h>
 #include "base/abi.h"
+#include "base/target.h"
 
 /* Target description for the native (direct machine-code) backend. This layer
  * is the single source of truth for architecture, operating system, calling
@@ -56,5 +57,7 @@ const Re0NativeTarget *re0_native_target_host(void);
 bool re0_native_target_supported(const Re0NativeTarget *target);
 /* Target-default C calling convention for the native encoder. */
 Re0CallingConvention re0_native_default_cc(const Re0NativeTarget *target);
+/* Shared semantic machine model; NULL for an unsupported descriptor. */
+const Re0TargetLayout *re0_native_target_layout(const Re0NativeTarget *target);
 
 #endif

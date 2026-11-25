@@ -19,6 +19,7 @@ typedef struct {
     int      packed;          /* @repr(packed): no field padding */
     unsigned explicit_align;  /* @align(N): N (power of two), 0 = natural */
     int      transparent;     /* @repr(transparent): single-field newtype */
+    bool     is_union;        /* untagged target-C union, not a sum type */
 } Re0StructDef;
 
 /* ── Enum definition ── */

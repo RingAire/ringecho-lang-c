@@ -12,7 +12,7 @@ def smoke(bin_dir):
     with tempfile.TemporaryDirectory(prefix="ringecho-installed-") as directory:
         source = Path(directory) / "smoke.reo"
         source.write_text('fn main() { println(42 as u8); }\n', encoding="utf-8")
-        commands = [("rem", "version"), ("rvm", "version"), ("rev", "check", str(source))]
+        commands = [("rem", "version"), ("rev", "check", str(source))]
         for name, *arguments in commands:
             result = subprocess.run([str(bin_dir / (name + suffix)), *arguments], cwd=directory,
                                     capture_output=True, text=True, timeout=30,

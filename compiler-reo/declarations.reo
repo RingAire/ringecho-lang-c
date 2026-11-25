@@ -1,0 +1,49 @@
+import "types"
+
+/* 20 Struct / 21 Union: a=name,b=field list,c=count. 22 Alias: a=name,b=type.
+ * This module preserves declaration syntax; layout/alias-cycle checking is
+ * not inferred from parsing success and remains the bootstrap sema's job. */
+fn parse_record() -> i64 {
+    let kind: i64 = if at("union") { 21 } else { 20 };
+    pos += 1;
+    if !at_ident() { report("expected record name"); }
+    let name_index: i64 = intern(tok_text(pos));
+    pos += 1;
+    if !type_expect("{") { return node(kind, name_index, vec_len(items), 0, -1, -1); }
+    let collected: vec = vec_new();
+    let count: i64 = 0;
+    while !at("}") && pos < token_count() {
+        if count >= (TypeListLimit) { report("record field limit exceeded"); break; }
+        if !at_ident() { report("expected field name"); break; }
+        let field_name: i64 = intern(tok_text(pos));
+        pos += 1;
+        type_expect(":");
+        let field_type: i64 = parse_type();
+        let j: i64 = 0;
+        while j < count {
+            if str_eq(svec_get(names, field_name), svec_get(names, na(vec_get(collected, j)))) {
+                report("duplicate record field");
+            }
+            j += 1;
+        }
+        vec_push(collected, node(11, field_name, field_type, -1, -1, -1));
+        count += 1;
+        if !at(",") { break; }
+        pos += 1;
+    }
+    type_expect("}");
+    if kind == 21 && count == 0 { report("union requires members"); }
+    let start: i64 = commit_list(collected, count);
+    free(collected);
+    return node(kind, name_index, start, count, -1, -1);
+}
+fn parse_type_alias() -> i64 {
+    pos += 1;
+    if !at_ident() { report("expected type alias name"); }
+    let name_index: i64 = intern(tok_text(pos));
+    pos += 1;
+    type_expect("=");
+    let target: i64 = parse_type();
+    type_expect(";");
+    return node(22, name_index, target, -1, -1, -1);
+}

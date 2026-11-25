@@ -1,12 +1,12 @@
 # RingEcho 安装说明
 
-安装包包含 `rev` 编译器（含 LSP）、`rem` 包管理器、`rvm` 版本管理器及许可证。标准库模板内置于工具中，使用 `rev init` 或 `rem init` 创建项目时生成；不需要把构建机的 `.renv` 复制进安装目录。
+安装包包含 `rev` 编译器（含 LSP）、`rem` 包管理器及许可证；`rvm` 版本管理器已独立为 [RingAire/rvm](https://github.com/RingAire/rvm)，需要时单独安装。标准库模板内置于工具中，使用 `rev init` 或 `rem init` 创建项目时生成；不需要把构建机的 `.renv` 复制进安装目录。
 
 ## Windows
 
 运行与系统架构匹配的 `*-setup.exe`。默认按当前用户安装到 `%LOCALAPPDATA%\Programs\RingEcho\<架构>`，不需要管理员权限。可从系统“已安装的应用”卸载。
 
-安装后将安装目录中的 `bin` 加入用户 PATH；或者直接使用其中的 `rev.exe`、`rem.exe`、`rvm.exe`。便携版解压后同样使用 `bin` 目录。
+安装后将安装目录中的 `bin` 加入用户 PATH；或者直接使用其中的 `rev.exe`、`rem.exe`。便携版解压后同样使用 `bin` 目录。
 
 生成并运行 C 程序还需要带 Windows 系统库及 pthread 支持的 C 工具链，例如 LLVM-MinGW 或 MinGW-w64。将工具链加入 PATH；默认调用 gcc，可用环境变量 `REO_CC` 指定编译器可执行文件。安装包已静态链接工具自身所需的 MinGW 运行库，启动工具不要求额外安装 winpthread DLL。
 
@@ -38,7 +38,6 @@ sudo apt install ./ringecho-<版本>-linux-<架构>.deb
 
 ```sh
 rem version
-rvm version
 rev check your-source.reo
 ```
 
@@ -48,4 +47,4 @@ rev check your-source.reo
 
 - `x64` 表示 x86_64，`x86` 表示 i686，`arm64` 表示 AArch64；不含 32 位 ARM。
 - 当前 x86 的 C 运行时依赖原生 `__int128` 而受限，CI 只验证其工具启动和语义检查。完整运行时支持未完成，不应将 x86 包用于需要完整执行能力的部署。
-- 这些产物未更改 rvm 中旧有的下载命名与安装事务；暂不通过 `rvm install` 安装本轮新格式软件包。
+- 需要切换编译器版本时使用独立的 [rvm](https://github.com/RingAire/rvm)；本安装包不再包含它。

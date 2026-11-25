@@ -19,9 +19,9 @@ RingEcho 编译器工具链的零依赖 C 实现。
 
 | 项目 | 值 |
 |------|-----|
-| 版本 | 0.3.0 |
+| 版本 | 0.4.0 |
 | 测试 | 通过（make test） |
-| 工具链 | 3 个二进制：`rev` / `rem` / `rvm` |
+| 工具链 | 2 个二进制：`rev` / `rem`（`rvm` 为独立项目） |
 | 后端 | C 源码、freestanding C、reo ISA、共享库、WebAssembly (WASI) |
 | 许可证 | Apache-2.0 |
 
@@ -36,7 +36,7 @@ RingEcho 编译器工具链的零依赖 C 实现。
 |--------|------|------|
 | `rev` | 编译器 / 求值器 | 编译、运行、类型检查、LSP 服务器、项目初始化、虚拟环境 |
 | `rem` | 包管理器 | 安装 / 列出 / 移除 / 搜索包（类 npm） |
-| `rvm` | 版本管理器 | 管理已安装的 RingEcho 编译器版本（类 nvm） |
+| `rvm` | 版本管理器（独立仓库） | [RingAire/rvm](https://github.com/RingAire/rvm) 安装已发布的编译器版本 |
 
 ## 构建
 
@@ -83,16 +83,11 @@ rem search <query>     # 搜索包
 rem publish            # 发布当前包
 ```
 
-### rvm — 版本管理器
+### rvm — 版本管理器（独立项目）
 
-```bash
-rvm install <version>  # 安装 RingEcho 版本
-rvm use <version>      # 切换版本
-rvm list               # 列出已安装版本
-rvm current            # 显示当前版本
-rvm uninstall <ver>    # 卸载版本
-rvm remote             # 列出可用版本
-```
+`rvm` 已迁到 [RingAire/rvm](https://github.com/RingAire/rvm)：它从
+`https://ringecho-lang.org/dist`（GitHub Releases 回退）安装已发布的编译器版本，
+独立版本号、独立发布。
 
 ## 特性
 
@@ -106,7 +101,9 @@ rvm remote             # 列出可用版本
 - Component 关键字
 - for-in 区间 + 字符串迭代
 - spawn/await 并发（pthread）
-- GC 引擎：3 种模式（none/auto/manual）× 3 种算法（tracing/arc-cycle/hybrid）
+- GC：3 种模式（none/auto/manual）。`none` 不登记字符串；`manual` 提供
+  `gc_retain`/`gc_release`（`gc_add_root`/`gc_remove_root` 同义）显式管理；
+  `auto` 会在阈值处触发收集，但编译器自动插入 retain/release 尚未实现。
 - LSP 服务器：JSON-RPC + 诊断
 - 多文件模块（import 递归解析）
 - extern C FFI

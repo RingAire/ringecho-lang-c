@@ -158,6 +158,12 @@ static bool stage_build_run(Re0Manager *m) {
         if (c->shared || c->wasm ||
             !re0_native_build(&c->build, &c->codegen.output, ctx->output, c->emit_object, c->native_target))
             c->had_error = true;
+    } else if (c->build.kernel.enabled) {
+        if (!re0_kernel_build_run(&c->build, ctx->code, ctx->output)) {
+            re0_manager_emit_event(m, RE0_EV_BUILD_DONE, NULL, NULL);
+            c->had_error = true;
+            return false;
+        }
     } else if (c->wasm) {
         /* WebAssembly target: write the C source, then compile with the
          * wasi-sdk clang (REO_WASI_CC) to wasm32-wasi. */
@@ -222,21 +228,27 @@ bool re0_compiler_compile_file(Re0Compiler *c, const char *path, const char *out
     }
     /* The target may have been selected on the CLI after init. */
     c->codegen.native_target = c->native_target;
+    /* Kernel profile selection (set on the build object from the CLI). */
+    c->codegen.kernel = c->build.kernel.enabled;
     /* Semantics must use the selected machine model (pointer width etc.). */
     {
         const Re0TargetLayout *layout = re0_target_layout_host();
-        if (c->backend == &re0_backend_native && c->native_target) {
-            bool win = c->native_target->os == RE0_OS_WINDOWS;
-            switch (c->native_target->arch) {
-                case RE0_ARCH_X86_64:
-                    layout = re0_target_layout_find(win ? "x86_64-windows" : "x86_64"); break;
-                case RE0_ARCH_X86:
-                    layout = re0_target_layout_find(win ? "x86-windows" : "x86"); break;
-                case RE0_ARCH_AARCH64:
-                    layout = re0_target_layout_find(win ? "aarch64-windows" : "aarch64"); break;
-                case RE0_ARCH_ARM:
-                    layout = re0_target_layout_find("arm"); break;
-                default: break;
+        if (c->build.kernel.enabled) {
+            layout = re0_kernel_build_layout(&c->build.kernel);
+            if (!layout) {
+                re0_error_append(&c->errors, RE0_ERR_SEMANTIC, RE0_SPAN_ZERO, NULL,
+                                 "unsupported kernel target layout: %s",
+                                 re0_kernel_build_target(&c->build.kernel));
+                c->had_error = true;
+                return false;
+            }
+        } else if (c->backend == &re0_backend_native && c->native_target) {
+            layout = re0_native_target_layout(c->native_target);
+            if (!layout) {
+                re0_error_append(&c->errors, RE0_ERR_SEMANTIC, RE0_SPAN_ZERO, NULL,
+                                 "unsupported native target layout");
+                c->had_error = true;
+                return false;
             }
         }
         re0_sema_set_target(&c->sema, layout);

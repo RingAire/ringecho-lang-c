@@ -37,7 +37,7 @@
 #endif
 
 static void print_usage(void) {
-    printf("RingEcho Module Manager (rem) v0.3.0\n");
+    printf("RingEcho Module Manager (rem) v0.4.0\n");
     printf("Usage:\n");
     printf("  rem init [name]              Initialize new project\n");
     printf("  rem install <pkg>            Install a package\n");
@@ -206,7 +206,7 @@ static int cmd_install(const char *pkg_name) {
     }
 
     char url[600];
-    snprintf(url, sizeof(url), "https://github.com/Ringaire/reo-pkg-%s.git", pkg_name);
+    snprintf(url, sizeof(url), "https://github.com/RingAire/reo-pkg-%s.git", pkg_name);
     char *clone_argv[] = { "git", "clone", "--depth", "1", url, pkg_path, NULL };
     printf("Installing '%s'...\n", pkg_name);
     int rc = run_program("git", clone_argv);
@@ -388,7 +388,7 @@ static int cmd_search(const char *query) {
     }
 
     printf("Searching for '%s'...\n", query);
-    printf("Registry: https://github.com/Ringaire/reo-pkg-%s\n", query);
+    printf("Registry: https://github.com/RingAire/reo-pkg-%s\n", query);
     printf("\nOnline search not yet available.\n");
     printf("Try: rem install %s\n", query);
     return 0;
@@ -415,7 +415,7 @@ static int cmd_publish(void) {
     printf("Publishing '%s' v%s...\n", cfg.package_name, cfg.package_version);
     printf("\nPublishing not yet available.\n");
     printf("To publish manually:\n");
-    printf("  1. Create repo: Ringaire/reo-pkg-%s\n", cfg.package_name);
+    printf("  1. Create repo: RingAire/reo-pkg-%s\n", cfg.package_name);
     printf("  2. Push your .reo files\n");
     printf("  3. Others can: rem install %s\n", cfg.package_name);
     return 0;
@@ -451,7 +451,7 @@ int main(int argc, char **argv) {
         return cmd_publish();
     }
     if (strcmp(cmd, "version") == 0 || strcmp(cmd, "--version") == 0) {
-        printf("rem v0.3.0\n");
+        printf("rem v0.4.0\n");
         return 0;
     }
 

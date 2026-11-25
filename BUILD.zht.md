@@ -45,7 +45,6 @@
 ```
 target/<Release|Debug|Alpha>/rev[.exe]   編譯器（含 LSP）
 target/<Release|Debug|Alpha>/rem[.exe]   套件管理器
-target/<Release|Debug|Alpha>/rvm[.exe]   版本管理器
 target/<Release|Debug|Alpha>/obj/...     中間目的檔
 target/Temp/                             產生的暫時 C 檔案
 ```

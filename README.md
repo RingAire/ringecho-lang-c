@@ -19,9 +19,9 @@ English | [简体中文](README.zh.md) | [繁體中文](README.zht.md)
 
 | Item | Value |
 |------|-------|
-| Version | 0.3.0 |
+| Version | 0.4.0 |
 | Tests | Passing (make test) |
-| Toolchain | 3 binaries: `rev` / `rem` / `rvm` |
+| Toolchain | 2 binaries: `rev` / `rem` (`rvm` is a separate project) |
 | Backends | C source, freestanding C, reo ISA, shared library, WebAssembly (WASI) |
 | License | Apache-2.0 |
 
@@ -37,7 +37,7 @@ The full type/layout migration is tracked in [TYPE_SYSTEM.md](TYPE_SYSTEM.md).
 |--------|------|-------------|
 | `rev` | Compiler / evaluator | Compile, run, type-check, LSP server, project init, venv |
 | `rem` | Package manager | Install/list/remove/search packages (npm-like) |
-| `rvm` | Version manager | Manage installed RingEcho compiler versions (nvm-like) |
+| `rvm` | Version manager (separate repo) | [RingAire/rvm](https://github.com/RingAire/rvm) installs released compiler versions |
 
 ## Build
 
@@ -84,16 +84,11 @@ rem search <query>     # Search packages
 rem publish            # Publish current package
 ```
 
-### rvm — version manager
+### rvm — version manager (separate project)
 
-```bash
-rvm install <version>  # Install a RingEcho version
-rvm use <version>      # Switch to a version
-rvm list               # List installed versions
-rvm current            # Show current version
-rvm uninstall <ver>    # Remove a version
-rvm remote             # List available versions
-```
+`rvm` now lives in [RingAire/rvm](https://github.com/RingAire/rvm). It installs
+released compiler versions from `https://ringecho-lang.org/dist` (GitHub
+Releases fallback) and is versioned and released independently.
 
 ## Features
 
@@ -107,7 +102,10 @@ rvm remote             # List available versions
 - Component keyword
 - for-in range + string iteration
 - spawn/await concurrency (pthread)
-- GC engine: 3 modes (none/auto/manual) × 3 algorithms (tracing/arc-cycle/hybrid)
+- GC: 3 modes (none/auto/manual). `none` leaves strings untracked; `manual`
+  exposes `gc_retain`/`gc_release` (`gc_add_root`/`gc_remove_root` are
+  aliases) for explicit ownership; `auto` collects at a threshold but the
+  compiler-side automatic retain/release pass is not implemented yet.
 - LSP server: JSON-RPC + diagnostics
 - Multi-file modules (import with recursive resolution)
 - extern C FFI

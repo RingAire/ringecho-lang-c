@@ -1,4 +1,5 @@
 #include "backend/native_internal.h"
+#include "analysis/atomic.h"
 #include <stdlib.h>
 #include <string.h>
 #include <float.h>
@@ -96,7 +97,9 @@ static bool compatible(Lower *l, NType actual, NType expected, Re0Expr *e) {
         return e->float_lit.val >= -FLT_MAX && e->float_lit.val <= FLT_MAX &&
                (double)(float)e->float_lit.val == e->float_lit.val;
     Re0Type from = {.kind = n_type_kind(actual)}, to = {.kind = n_type_kind(expected)};
-    return actual != N_INVALID && expected != N_INVALID && re0_type_coercible(&from, &to);
+    const Re0TargetLayout *layout = re0_native_target_layout(l->m->target);
+    return layout && actual != N_INVALID && expected != N_INVALID &&
+        re0_type_coercible_on(layout, &from, &to);
 }
 static NType expression(Lower *l, Re0Expr *e);
 static void body(Lower *l, Re0Stmt **stmts, int count);
@@ -209,6 +212,9 @@ static NType expression_impl(Lower *l, Re0Expr *e) {
                 fail(l, "only direct function calls are supported"); return N_INVALID;
             }
             const char *name = e->call.callee->ident.name;
+            if (re0_atomic_name(name)) {
+                fail(l, "atomic operations are not supported by the native backend"); return N_INVALID;
+            }
             if (strcmp(name, "assert") == 0) {
                 if (e->call.arg_count != 1 || expression(l, e->call.args[0]) != N_BOOL)
                     fail(l, "assert requires one bool argument");
@@ -366,6 +372,12 @@ bool n_lower(NModule *m, Re0StmtVec *checked) {
         Re0Stmt *s = checked->data[i];
         unsigned wrappers = 0;
         while (s && s->kind == STMT_PUB && wrappers++ < N_MAX_DEPTH) s = s->pub.inner;
+        if (s && s->kind == STMT_STRUCT && s->struct_decl.is_union) {
+            n_error(m, s->span, "union declarations are not supported by the native backend"); break;
+        }
+        if (s && s->kind == STMT_ATTRIBUTE) {
+            n_error(m, s->span, "declaration attributes are not supported by the native backend"); break;
+        }
         if (!s) { n_error(m, RE0_SPAN_ZERO, "missing declaration"); break; }
         if (s->kind == STMT_FUNCTION && !s->function.type_param_count && !s->function.is_async)
             register_function(m, s->function.name, s->function.ret_type, s->function.param_count, s, NULL);

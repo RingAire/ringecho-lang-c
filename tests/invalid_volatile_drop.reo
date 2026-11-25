@@ -1,0 +1,6 @@
+fn main() {
+    let value: u32 = 0u32;
+    let device: *mut volatile u32 = (&mut value) as *mut volatile u32;
+    let ordinary: *mut u32 = device;
+    *ordinary = 1u32;
+}

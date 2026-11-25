@@ -1,0 +1,15 @@
+/* Simple field compound assignments must take the shared lvalue lowering,
+ * rather than a field-assignment AST node that cannot store the operator. */
+struct Counter { value: i8 }
+
+fn main() {
+    let counter = Counter { value: 127i8 };
+    counter.value += 1i8;
+    assert(counter.value == -128i8);
+    counter.value -= 1i8;
+    assert(counter.value == 127i8);
+    counter.value *= 2i8;
+    assert(counter.value == -2i8);
+    counter.value /= 2i8;
+    assert(counter.value == -1i8);
+}

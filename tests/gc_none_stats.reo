@@ -1,0 +1,7 @@
+fn main() {
+    let s = str_concat("a", "b");
+    assert(gc_stats() == 0i64);
+    assert(str_len(s) == 2i64);
+    gc_collect();
+    assert(gc_stats() == 0i64);
+}

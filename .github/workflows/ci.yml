@@ -280,7 +280,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          mapfile -t files < <(find dist -type f \( -name '*.zip' -o -name '*.deb' -o -name '*.pkg' -o -name '*-setup.exe' \) | sort)
+          mapfile -t files < <(find dist -type f \( -name '*.zip' -o -name '*.tar.gz' -o -name '*.deb' -o -name '*.pkg' -o -name '*-setup.exe' \) | sort)
           printf 'uploading %d files for %s\n' "${#files[@]}" "$GITHUB_REF_NAME"
           gh release create "$GITHUB_REF_NAME" \
             --repo "$GITHUB_REPOSITORY" \

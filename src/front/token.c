@@ -6,11 +6,12 @@ static const char *kw_names[] = {
     [TK_KW_IF]="if", [TK_KW_ELSE]="else", [TK_KW_FOR]="for",
     [TK_KW_WHILE]="while", [TK_KW_MATCH]="match", [TK_KW_RETURN]="return",
     [TK_KW_IMPORT]="import", [TK_KW_FROM]="from", [TK_KW_MODULE]="module",
-    [TK_KW_PUB]="pub", [TK_KW_STRUCT]="struct", [TK_KW_ENUM]="enum",
+    [TK_KW_PUB]="pub", [TK_KW_STRUCT]="struct", [TK_KW_UNION]="union", [TK_KW_ENUM]="enum",
     [TK_KW_TRAIT]="trait", [TK_KW_IMPL]="impl", [TK_KW_AS]="as",
     [TK_KW_TYPE]="type", [TK_KW_SELF]="self", [TK_KW_TRUE]="true",
     [TK_KW_FALSE]="false", [TK_KW_BREAK]="break", [TK_KW_CONTINUE]="continue",
-    [TK_KW_CONST]="const", [TK_KW_EXTERN]="extern", [TK_KW_COMPONENT]="component",
+    [TK_KW_CONST]="const", [TK_KW_STATIC]="static", [TK_KW_EXTERN]="extern",
+    [TK_KW_COMPONENT]="component",
     [TK_KW_ASYNC]="async", [TK_KW_AWAIT]="await", [TK_KW_SPAWN]="spawn",
 };
 

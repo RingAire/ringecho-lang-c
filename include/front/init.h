@@ -1,5 +1,6 @@
 #ifndef RE0_FRONT_INIT_H
 #define RE0_FRONT_INIT_H
+#include "front/declaration_attributes.h"
 
 #include "front/token.h"
 #include "front/stream.h"

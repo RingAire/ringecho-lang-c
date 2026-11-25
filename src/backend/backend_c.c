@@ -1,4 +1,5 @@
 #include "backend/backend_c_internal.h"
+#include "backend/kernel_profile.h"
 
 /* C backend glue: prelude emission (c_begin) and epilogue (c_end),
  * plus the Re0Backend vtable instances. */
@@ -7,6 +8,14 @@
 static void c_begin(Re0Codegen *c) {
     reset_c_state();
     c_globals_reset();
+    if (c->kernel) {
+        /* Kernel profile: self-contained prelude + minimal runtime, emitted by
+         * the dedicated kernel_profile module. */
+        re0_kernel_prelude_emit(&c->output);
+        re0_kernel_runtime_emit(&c->output);
+        g_fwd_insert_pos = c->output.len;
+        return;
+    }
     if (c->backend == &re0_backend_c_freestanding) {
         re0_buffer_write_str(&c->output,
             "#include <stdint.h>\n#include <stdbool.h>\n"
@@ -55,6 +64,7 @@ static void c_end(Re0Codegen *c) {
 
     c_globals_finish(c);
 
+    if (c->kernel) return;
     if (c->backend == &re0_backend_c_freestanding) return;
 
     if (!c->emit_main) return;

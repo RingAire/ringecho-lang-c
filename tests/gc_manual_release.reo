@@ -1,0 +1,24 @@
+@gc(manual)
+fn main() {
+    let s = str_concat("a", "b");
+    assert(gc_stats() == 1i64);
+    gc_release(s as ptr);
+    assert(gc_stats() == 0i64);
+    gc_collect();
+    assert(gc_stats() == 0i64);
+
+    let t = str_concat("c", "d");
+    gc_retain(t as ptr);
+    assert(gc_stats() == 1i64);
+    gc_release(t as ptr);
+    assert(gc_stats() == 1i64);
+    gc_release(t as ptr);
+    assert(gc_stats() == 0i64);
+
+    let r = str_concat("e", "f");
+    gc_add_root(r as ptr);
+    gc_remove_root(r as ptr);
+    assert(gc_stats() == 1i64);
+    free(r as ptr);
+    assert(gc_stats() == 0i64);
+}

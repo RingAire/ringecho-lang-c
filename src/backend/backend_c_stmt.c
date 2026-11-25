@@ -1,4 +1,5 @@
 #include "backend/backend_c_internal.h"
+#include "backend/c_declaration.h"
 
 /* statement code generation + backend state reset. */
 
@@ -104,9 +105,21 @@ void c_gen_stmt(Re0Codegen *c, Re0Stmt *s, int depth) {
             break;
         case STMT_STATIC: {
             const char *ctype = reo_type_to_c(s->static_decl.type);
-            re0_buffer_write_fmt(b, "static %s %s;\n", ctype, s->static_decl.name);
+            /* Preserve hosted constructor ordering; image initialization is
+             * explicit to the freestanding profile. */
+            bool constant = c->kernel && re0_c_static_literal(s->static_decl.value);
+            if (c->kernel && s->static_decl.value && !constant) {
+                re0_error_append(c->errors, RE0_ERR_SEMANTIC, s->span, NULL,
+                                 "kernel static initialization requires an image-constant literal; initialize this object explicitly at startup");
+                c->had_error = true; break;
+            }
+            re0_buffer_write_str(b, "static ");
+            re0_c_declaration_attributes_emit(c, s, true);
+            re0_buffer_write_fmt(b, "%s %s", ctype, s->static_decl.name);
+            if (constant) { re0_buffer_write_str(b, " = "); re0_c_static_literal_emit(c, s->static_decl.value); }
+            re0_buffer_write_str(b, ";\n");
             track_var(s->static_decl.name, ctype);
-            if (s->static_decl.value) {
+            if (s->static_decl.value && !constant) {
                 Re0Buffer saved = c->output;
                 c->output = g_global_init;
                 re0_buffer_write_fmt(&c->output, "    %s = ", s->static_decl.name);
@@ -297,6 +310,7 @@ void c_gen_stmt(Re0Codegen *c, Re0Stmt *s, int depth) {
                 re0_type_free_tree(rt);
             }
             if (never_ret) re0_buffer_write_str(b, "__attribute__((noreturn)) ");
+            re0_c_declaration_attributes_emit(c, s, true);
             re0_buffer_write_fmt(b, "%s %s(", ret_c, fn_name);
             if(!s->function.param_count) re0_buffer_write_str(b,"void");
             for (int i = 0; i < s->function.param_count; i++) {

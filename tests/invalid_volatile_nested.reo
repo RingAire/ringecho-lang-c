@@ -1,0 +1,7 @@
+fn main() {
+    let value: u32 = 0u32;
+    let ordinary: *mut u32 = (&mut value) as *mut u32;
+    let indirect: *mut *mut u32 = (&mut ordinary) as *mut *mut u32;
+    let incompatible: *mut *mut volatile u32 = indirect;
+    **incompatible = 1u32;
+}

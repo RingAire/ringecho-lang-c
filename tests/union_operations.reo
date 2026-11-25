@@ -1,0 +1,14 @@
+union Word { integer: u64, bytes: [u8; 8] }
+type Alias = Word;
+
+fn main() {
+    let word = Alias { integer: 11u64 };
+    assert(word.integer == 11u64);
+    word.integer += 3u64;
+    assert(word.integer == 14u64);
+    word = Word { bytes: [1u8,2u8,3u8,4u8,5u8,6u8,7u8,8u8] };
+    assert(word.bytes[7] == 8u8);
+    assert(sizeof<Word>() == 8usize);
+    assert(offsetof<Word>("integer") == 0usize);
+    assert(offsetof<Word>("bytes") == 0usize);
+}

@@ -81,6 +81,10 @@ void re0_builtin_init(Re0BuiltinRegistry *r) {
                 (const char*[]){"p"}, (const char*[]){"ptr"}, 1);
     add_builtin(r, "gc_remove_root", "unit",
                 (const char*[]){"p"}, (const char*[]){"ptr"}, 1);
+    add_builtin(r, "gc_retain", "unit",
+                (const char*[]){"p"}, (const char*[]){"ptr"}, 1);
+    add_builtin(r, "gc_release", "unit",
+                (const char*[]){"p"}, (const char*[]){"ptr"}, 1);
     /* String vectors use the same precise Vec<str> container machinery. */
     add_builtin(r, "svec_new", "svec", NULL, NULL, 0);
     add_builtin(r, "svec_push", "unit",

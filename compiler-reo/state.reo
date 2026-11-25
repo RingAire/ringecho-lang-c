@@ -1,0 +1,16 @@
+/* Shared frontend storage. The driver owns allocation/reset/destruction.
+ * Dependency modules import this declaration-only module, never the driver. */
+static errors: svec;
+static error_count: i64;
+static tkind: svec;
+static ttext: svec;
+static toff: vec;
+static tlen: vec;
+static pos: i64;
+static nodes: vec;
+static names: svec;
+static items: vec;
+static types: vec;
+static FrontendSourceLimit: i64 = 1048576;
+static FrontendTokenLimit: i64 = 65536;
+static FrontendErrorLimit: i64 = 128;

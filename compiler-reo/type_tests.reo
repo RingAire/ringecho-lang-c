@@ -1,0 +1,76 @@
+/* Executed by frontend.reo; these checks do not replace the C bootstrap tests. */
+fn check_type_roundtrip(text: str, canonical: str) {
+    reset(); scan(text);
+    let first: i64 = parse_type();
+    require_clean(str_concat("type parse ", text));
+    assert(pos == token_count());
+    assert(str_eq(dump_type(first), canonical));
+    let start: i64 = token_count();
+    scan(canonical); pos = start;
+    let second: i64 = parse_type();
+    require_clean("type roundtrip");
+    assert(pos == token_count());
+    assert(equal_type(first, second));
+}
+fn check_type_invalid(text: str) {
+    reset(); scan(text); parse_type();
+    assert(error_count > 0);
+}
+fn check_type_distinct(a: str, b: str) {
+    reset(); scan(a);
+    let first: i64 = parse_type();
+    let start: i64 = token_count();
+    scan(b); pos = start;
+    let second: i64 = parse_type();
+    require_clean("type identity");
+    assert(!equal_type(first, second));
+}
+fn selftest_types() {
+    check_type_roundtrip("i128", "i128");
+    check_type_roundtrip("u128", "u128");
+    check_type_roundtrip("usize", "usize");
+    check_type_roundtrip("!", "never");
+    check_type_roundtrip("()", "unit");
+    check_type_roundtrip("*u8", "*mut u8");
+    check_type_roundtrip("*volatile const u32", "*const volatile u32");
+    check_type_roundtrip("&mut [*const volatile u64; 3]", "&mut [*const volatile u64; 3]");
+    check_type_roundtrip("[u8; 0]", "[u8; 0]");
+    check_type_roundtrip("[u8]", "[u8]");
+    check_type_roundtrip("(u8)", "u8");
+    check_type_roundtrip("(u8,)", "(u8,)");
+    check_type_roundtrip("(u8, [u32; 4], &mut u64)", "(u8, [u32; 4], &mut u64)");
+    check_type_roundtrip("fn()", "fn() -> unit");
+    check_type_roundtrip("fn(*const u8, usize) -> Result<[u8; 8], Error>",
+                         "fn(*const u8, usize) -> Result<[u8; 8], Error>");
+    check_type_roundtrip("Vec<Vec<u128>>", "Vec<Vec<u128>>");
+    check_type_roundtrip("*mut volatile *const volatile u8", "*mut volatile *const volatile u8");
+    check_type_invalid("*"); check_type_invalid("&mut");
+    check_type_invalid("*mut const u8"); check_type_invalid("*volatile volatile u8");
+    check_type_invalid("[u8; -1]"); check_type_invalid("[u8; 9223372036854775808]");
+    check_type_invalid("[u8; 3"); check_type_invalid("fn(u8 -> u32");
+    check_type_invalid("Vec<>"); check_type_invalid("Vec<u8");
+    check_type_invalid("u32<u8>"); check_type_invalid("(u8 u32)");
+    check_type_distinct("*mut u8", "*const u8");
+    check_type_distinct("*mut u8", "*mut volatile u8");
+    check_type_distinct("*mut volatile *mut u8", "*mut *mut volatile u8");
+    check_type_distinct("[u8; 2]", "[u8; 3]");
+    check_type_distinct("[u8]", "[u8; 0]");
+    check_type_distinct("fn(u8) -> u32", "fn(u32) -> u32");
+    check_type_distinct("Vec<u8>", "Vec<u32>");
+    let nested: str = "u8";
+    let i: i64 = 0;
+    while i < TypeDepthLimit + 1 { nested = str_concat("*mut ", nested); i += 1; }
+    check_type_invalid(nested);
+}
+
+fn selftest_type_declarations() {
+    let program: i64 = analyze("struct Node { next: *mut Node, callback: fn(&u8) -> u128 } " +
+        "union Word { integer: u128, bytes: [u8; 16] } type Handle = *const volatile Word;");
+    require_clean("type declarations");
+    assert(str_eq(dump_program(program), "(block (struct Node (next: *mut Node callback: fn(&u8) -> u128)) " +
+        "(union Word (integer: u128 bytes: [u8; 16])) (type Handle = *const volatile Word))"));
+    analyze("union Empty {}"); assert(error_count > 0);
+    analyze("struct Duplicate { value: u8, value: u16 }"); assert(error_count > 0);
+    analyze("type Broken = fn(u8 -> u32;"); assert(error_count > 0);
+    analyze("union Broken { value: [u8; 4 }"); assert(error_count > 0);
+}

@@ -28,6 +28,10 @@ struct Re0Codegen {
      * point so the generated C can be linked into a shared library. */
     bool emit_main;
     bool c_return_void;
+    /* Kernel profile: the C backend emits a self-contained prelude that does
+     * not depend on the host C library (no <stdio.h>/<stdlib.h>/<string.h>/
+     * <math.h>/<errno.h>), and the build links a freestanding image. */
+    bool kernel;
 };
 
 typedef struct Re0Backend {

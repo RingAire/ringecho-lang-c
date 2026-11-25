@@ -2,12 +2,13 @@
 #define RE0_BUILD_H
 #include "base/buffer.h"
 #include "base/error.h"
+#include "exec/kernel_build.h"
 #include <stdbool.h>
 #include <stddef.h>
 
 #define RE0_BUILD_MAX_FLAGS 16
 
-typedef struct {
+typedef struct Re0Build {
     Re0ErrorList *errors;
     const char   *cc_path;
     const char   *output_path;
@@ -26,6 +27,8 @@ typedef struct {
     int           lib_dir_count;
     const char   *libs[RE0_BUILD_MAX_FLAGS];
     int           lib_count;
+    /* Kernel-profile configuration and inputs (see exec/kernel_build.h). */
+    Re0KernelBuild kernel;
 } Re0Build;
 
 void re0_build_init(Re0Build *b, Re0ErrorList *errors);

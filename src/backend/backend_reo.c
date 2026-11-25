@@ -1,4 +1,6 @@
 #include "backend/backend.h"
+#include "analysis/atomic.h"
+#include "base/re0_limits.h"
 #include "base/re0_limits.h"
 #include <string.h>
 #include <stdlib.h>
@@ -201,6 +203,11 @@ static int eval_expr(Re0Codegen *c, Re0Expr *e) {
         case EXPR_CALL: {
             if (e->call.callee->kind == EXPR_IDENT) {
                 const char *fn = e->call.callee->ident.name;
+                if (re0_atomic_name(fn)) {
+                    re0_error_append(c->errors, RE0_ERR_SEMANTIC, e->span, NULL,
+                                     "atomic operations are not supported by the REO assembly backend");
+                    c->had_error = true; return R_ZERO;
+                }
                 if (strcmp(fn, "println") == 0 || strcmp(fn, "print") == 0 ||
                     strcmp(fn, "panic") == 0 || strcmp(fn, "assert") == 0) {
                     emit(c, "    SYSCALL 0");
@@ -262,6 +269,20 @@ static void emit_body(Re0Codegen *c, Re0Stmt **body, int count);
 static void emit_stmt(Re0Codegen *c, Re0Stmt *s, int depth) {
     (void)depth;
     if (!s) return;
+    Re0Stmt *declaration = s;
+    unsigned wrappers = 0;
+    while (declaration && (declaration->kind == STMT_ATTRIBUTE || declaration->kind == STMT_PUB) && wrappers++ < RE0_MAX_PARSE_DEPTH)
+        declaration = declaration->kind == STMT_ATTRIBUTE ? declaration->attribute.inner : declaration->pub.inner;
+    if (declaration && (declaration->declaration.section || declaration->declaration.used || declaration->declaration.weak)) {
+        re0_error_append(c->errors, RE0_ERR_SEMANTIC, s->span, NULL,
+                         "declaration attributes are not supported by the REO assembly backend");
+        c->had_error = true; return;
+    }
+    if (declaration && declaration->kind == STMT_STRUCT && declaration->struct_decl.is_union) {
+        re0_error_append(c->errors, RE0_ERR_SEMANTIC, s->span, NULL,
+                         "union declarations are not supported by the REO assembly backend");
+        c->had_error = true; return;
+    }
     switch (s->kind) {
         case STMT_LET: {
             int reg = alloc_var(c, s->let_stmt.name);

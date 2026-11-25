@@ -1,0 +1,5 @@
+fn main() {
+    free("abc");
+    assert(str_len("abc") == 3i64);
+    println("done");
+}

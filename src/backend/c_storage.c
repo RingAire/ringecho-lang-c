@@ -146,7 +146,9 @@ const char *c_storage_sequence(const char *element, size_t count, bool slice) {
     else re0_buffer_write_fmt(b, "__extension__ typedef struct { %s data[%zu]; } %s;\n", element, count, t->name);
     b=&storage.helpers;
     re0_buffer_write_fmt(b, "static %s %s_repeat(%s value, int64_t count) {\n", t->name, t->name, element);
-    re0_buffer_write_fmt(b, "    %s result = {0};\n", t->name);
+    /* Empty arrays and arrays of unit have no scalar first subobject. GNU
+     * empty initialization handles those as well as ordinary aggregates. */
+    re0_buffer_write_fmt(b, "    %s result = {};\n", t->name);
     if (slice) {
         re0_buffer_write_str(b, "    size_t stride = sizeof(value) ? sizeof(value) : 1;\n    if (count < 0 || (uint64_t)count > __REO_MAX_SEQUENCE || (uint64_t)count > SIZE_MAX / stride) __reo_sequence_error();\n");
         re0_buffer_write_str(b, "    result.len = (size_t)count;\n    result.data = count ? __reo_sequence_alloc((size_t)count * stride) : NULL;\n");
@@ -187,8 +189,9 @@ static const char *record(const Re0Type *type, bool complete) {
     CStorageType *t = entry(key.data, def->kind == STMT_ENUM ? C_STORAGE_ENUM : C_STORAGE_RECORD, ac ? NULL : name);
     re0_buffer_free(&key);
     if (!t) return "__reo_invalid_type";
+    const char *record_kind = def->kind == STMT_STRUCT && def->struct_decl.is_union ? "union" : "struct";
     if (!t->state) {
-        re0_buffer_write_fmt(&storage.forwards, "typedef struct %s %s;\n", t->name, t->name);
+        re0_buffer_write_fmt(&storage.forwards, "typedef %s %s %s;\n", record_kind, t->name, t->name);
         t->state = 1;
     }
     if (!complete || t->state == 3) return t->name;
@@ -198,7 +201,7 @@ static const char *record(const Re0Type *type, bool complete) {
     if (saved + (size_t)ac > 128) { c_storage_fail("generic binding depth exceeded"); return t->name; }
     for (int i = 0; i < ac; i++) storage.bindings[storage.binding_count++] = (Binding){def->struct_decl.type_params[i], args[i]};
     Re0Buffer body; re0_buffer_init(&body);
-    re0_buffer_write_str(&body, "struct ");
+    re0_buffer_write_fmt(&body, "%s ", record_kind);
     if (def->kind == STMT_STRUCT) {
         bool packed = def->struct_decl.packed;
         unsigned al = def->struct_decl.explicit_align;
@@ -272,6 +275,17 @@ static const char *render_impl(const Re0Type *type, bool complete) {
         if (type->kind == RE0_TYPE_PTR && !type->ptr_.inner) return "void*";
         bool mut = type->kind == RE0_TYPE_REFERENCE ? type->ref_.mutable_ : type->ptr_.mutable_;
         base = render(type->kind == RE0_TYPE_REFERENCE ? type->ref_.inner : type->ptr_.inner, false);
+        if (type->is_volatile) {
+            char vb[256];
+            /* Qualify the immediate pointee, not the leaf scalar of a
+             * nested pointer: T* volatile* differs from volatile T**. */
+            int vn = snprintf(vb, sizeof(vb), "%s volatile", base);
+            if (vn < 0 || (size_t)vn >= sizeof(vb)) {
+                c_storage_fail("volatile pointer target spelling too long");
+                return "__reo_invalid_type";
+            }
+            return c_storage_pointer(vb, mut);
+        }
         return c_storage_pointer(base,mut);
     }
     if (type->kind == RE0_TYPE_FN || type->kind == RE0_TYPE_TUPLE) {

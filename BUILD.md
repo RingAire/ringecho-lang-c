@@ -45,7 +45,6 @@ Generated C programs link with `-pthread` (spawn/await runtime).
 ```
 target/<Release|Debug|Alpha>/rev[.exe]   compiler (with LSP)
 target/<Release|Debug|Alpha>/rem[.exe]   package manager
-target/<Release|Debug|Alpha>/rvm[.exe]   version manager
 target/<Release|Debug|Alpha>/obj/...     intermediate object files
 target/Temp/                             generated temporary C files
 ```

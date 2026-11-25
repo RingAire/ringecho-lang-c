@@ -28,6 +28,7 @@
 
 /* ── file/message size limits ── */
 #define RE0_MAX_SOURCE_BYTES    (16 * 1024 * 1024)
+#define RE0_MAX_IDENTIFIER       255
 #define RE0_MAX_LSP_MESSAGE     (16 * 1024 * 1024)
 #define RE0_MAX_JSON_STRING     (1 * 1024 * 1024)
 

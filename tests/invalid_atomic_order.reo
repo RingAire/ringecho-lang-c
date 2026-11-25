@@ -1,0 +1,5 @@
+fn main() {
+    let value: u32 = 0u32;
+    let pointer: *mut u32 = (&mut value) as *mut u32;
+    atomic_store(pointer, 3u32, "acquire");
+}

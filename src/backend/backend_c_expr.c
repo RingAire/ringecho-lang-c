@@ -1,4 +1,7 @@
 #include "backend/backend_c_internal.h"
+#include "backend/kernel_arithmetic.h"
+#include "backend/c_atomic.h"
+#include "analysis/atomic.h"
 
 /* expression code generation (c_gen_expr) and all expression forms. */
 
@@ -19,7 +22,11 @@ static int c_gen_expr_impl(Re0Codegen *c, Re0Expr *e) {
             Re0Integer value = e->int_lit.integer;
             Re0TypeKind kind = e->resolved_type ? e->resolved_type->kind : RE0_TYPE_I64;
             const char *type = reo_type_to_c(re0_type_kind_name(kind));
-            if (value.high || !re0_integer_fits(value, 64, true)) {
+            if (c->kernel && !value.high && !value.negative && !re0_integer_fits(value, 64, true)) {
+                /* Full-width u64 literals must not require an i128 carrier on
+                 * i686, where the target C compiler has no __int128 type. */
+                re0_buffer_write_fmt(b, "((%s)%lluULL)", type, (unsigned long long)value.low);
+            } else if (value.high || !re0_integer_fits(value, 64, true)) {
                 re0_buffer_write_fmt(b, "((%s)(", type);
                 if (value.negative) re0_buffer_write_str(b, "-1 - (__reo_i128)(");
                 if (value.negative) {
@@ -101,6 +108,10 @@ static int c_gen_expr_impl(Re0Codegen *c, Re0Expr *e) {
                 op == BINOP_DIV ? 3 : op == BINOP_MOD ? 4 : op == BINOP_SHL ? 5 : op == BINOP_SHR ? 6 : -1;
             if (operation >= 0 && re0_type_is_integer(result_kind)) {
                 const char *type = reo_type_to_c(re0_type_kind_name(result_kind));
+                if (c->kernel) {
+                    re0_kernel_binary_emit(c, e);
+                    break;
+                }
                 bool sign = re0_type_is_signed(result_kind);
                 re0_buffer_write_fmt(b, "((%s)(%s__reo_conv_binary((__reo_u128)(", type,
                                         sign ? "__reo_conv_signed(" : "");
@@ -133,6 +144,10 @@ static int c_gen_expr_impl(Re0Codegen *c, Re0Expr *e) {
             Re0TypeKind kind = c_expr_scalar_kind(e);
             if (e->unary.op == UNOP_NEG && re0_type_is_integer(kind)) {
                 const char *type = reo_type_to_c(re0_type_kind_name(kind));
+                if (c->kernel) {
+                    re0_kernel_negate_emit(c, e);
+                    break;
+                }
                 bool sign = re0_type_is_signed(kind);
                 re0_buffer_write_fmt(b, "((%s)(%s((__reo_u128)0 - (__reo_u128)(", type,
                                         sign ? "__reo_conv_signed(" : "");
@@ -275,6 +290,13 @@ static int c_gen_expr_impl(Re0Codegen *c, Re0Expr *e) {
                     break;
                 }
                 if (strcmp(fn, "panic") == 0) {
+                    if (c->kernel) {
+                        re0_buffer_write_str(b, "(__reo_kernel_fail_message(");
+                        if (e->call.arg_count > 0) c_gen_expr(c, e->call.args[0]);
+                        else re0_buffer_write_str(b, "\"panic\"");
+                        re0_buffer_write_str(b, "), 0)");
+                        break;
+                    }
                     re0_buffer_write_str(b, "(fprintf(stderr, \"panic: %s\\n\", (char*)");
                     if (e->call.arg_count > 0) c_gen_expr(c, e->call.args[0]);
                     else re0_buffer_write_str(b, "\"\"");
@@ -284,7 +306,9 @@ static int c_gen_expr_impl(Re0Codegen *c, Re0Expr *e) {
                 if (strcmp(fn, "assert") == 0) {
                     re0_buffer_write_str(b, "((");
                     c_gen_expr(c, e->call.args[0]);
-                    re0_buffer_write_str(b, ") ? 0 : (fprintf(stderr, \"assertion failed\\n\"), exit(1), 0))");
+                    re0_buffer_write_str(b, c->kernel
+                        ? ") ? 0 : (__reo_kernel_fail_message(\"assertion failed\"), 0))"
+                        : ") ? 0 : (fprintf(stderr, \"assertion failed\\n\"), exit(1), 0))");
                     break;
                 }
                 /* string builtins */
@@ -400,6 +424,10 @@ static int c_gen_expr_impl(Re0Codegen *c, Re0Expr *e) {
                 if (strcmp(fn, "is_alpha") == 0)   { re0_buffer_write_str(b, "__reo_is_alpha((char)"); goto gen1; }
                 if (strcmp(fn, "is_alnum") == 0)   { re0_buffer_write_str(b, "__reo_is_alnum((char)"); goto gen1; }
                 if (strcmp(fn, "free") == 0) {
+                    if (e->call.arg_count == 1 && e->call.args[0]->kind == EXPR_STRING) {
+                        re0_buffer_write_str(b, "(0)");
+                        break;
+                    }
                     char name[128];
                     if(e->call.arg_count==1 && infer_expr_c_type(e->call.args[0],name,sizeof(name))) {
                         const CStorageType *t=c_storage_find(name);
@@ -412,6 +440,7 @@ static int c_gen_expr_impl(Re0Codegen *c, Re0Expr *e) {
                     }
                     re0_buffer_write_str(b,"(__REO_CONV_FREE((void*)");goto gen1;
                 }
+                if (re0_atomic_name(fn)) { re0_c_atomic_emit(c, e); break; }
                 if (strcmp(fn, "exit") == 0)       { re0_buffer_write_str(b, "(exit((int)"); goto gen1; }
                 if (strcmp(fn, "str_slice") == 0)  {
                     re0_buffer_write_str(b, "__reo_str_slice((char*)");
@@ -456,6 +485,8 @@ static int c_gen_expr_impl(Re0Codegen *c, Re0Expr *e) {
                 if (strcmp(fn, "gc_stats") == 0)      { re0_buffer_write_str(b, "__reo_gc_stats()"); break; }
                 if (strcmp(fn, "gc_add_root") == 0)   { re0_buffer_write_str(b, "(__reo_gc_add_root((void*)"); goto gen1; }
                 if (strcmp(fn, "gc_remove_root") == 0){ re0_buffer_write_str(b, "(__reo_gc_remove_root((void*)"); goto gen1; }
+                if (strcmp(fn, "gc_retain") == 0)     { re0_buffer_write_str(b, "(__reo_gc_retain((void*)"); goto gen1; }
+                if (strcmp(fn, "gc_release") == 0)    { re0_buffer_write_str(b, "(__reo_gc_release((void*)"); goto gen1; }
                 /* spawn/await concurrency runtime */
                 if (strcmp(fn, "__reo_spawn") == 0 && e->call.arg_count >= 1) {
                     /* spawn f() -> __reo_rt_spawn(&f) */
@@ -490,7 +521,8 @@ static int c_gen_expr_impl(Re0Codegen *c, Re0Expr *e) {
                 if (e->call.arg_count > 0) c_gen_expr(c, e->call.args[0]); else re0_buffer_write_str(b, "0");
                 re0_buffer_write_char(b, ')');
                 if (strcmp(fn, "free") == 0 || strcmp(fn, "exit") == 0 ||
-                    strcmp(fn, "gc_add_root") == 0 || strcmp(fn, "gc_remove_root") == 0)
+                    strcmp(fn, "gc_add_root") == 0 || strcmp(fn, "gc_remove_root") == 0 ||
+                    strcmp(fn, "gc_retain") == 0 || strcmp(fn, "gc_release") == 0)
                     re0_buffer_write_str(b, ", 0)");
                 break;
                 /* 2-arg helper wrapper */

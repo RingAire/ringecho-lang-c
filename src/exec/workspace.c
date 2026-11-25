@@ -57,12 +57,13 @@ static bool already_loaded(Re0Workspace *ws, const char *path) {
 }
 
 /* record loaded file */
-static void mark_loaded(Re0Workspace *ws, const char *path) {
-    if (ws->file_count >= RE0_MAX_FILES) return;
+static bool mark_loaded(Re0Workspace *ws, const char *path) {
+    if (ws->file_count >= RE0_MAX_FILES) return false;
     strncpy(ws->files[ws->file_count].path, path, RE0_MAX_PATH - 1);
     ws->files[ws->file_count].path[RE0_MAX_PATH-1] = '\0';
     ws->files[ws->file_count].loaded = true;
     ws->file_count++;
+    return true;
 }
 
 /* extract dependency file path from import statement
@@ -179,7 +180,13 @@ static char *read_file_content(const char *path) {
     
     size_t rd = fread(buf, 1, (size_t)sz, f);
     if (rd != (size_t)sz) {
-        /* partial read or error */
+        /* partial read or read error */
+        free(buf);
+        fclose(f);
+        return NULL;
+    }
+    if (memchr(buf, 0, rd) != NULL) {
+        fprintf(stderr, "imported source contains a NUL byte: %s\n", path);
         free(buf);
         fclose(f);
         return NULL;
@@ -196,7 +203,11 @@ static void load_file_recursive(Re0Workspace *ws, const char *path,
                                  Re0Lexer *lexer, Re0Parser *parser,
                                  Re0StmtVec *out_stmts) {
     if (already_loaded(ws, path)) return;
-    mark_loaded(ws, path);
+    if (!mark_loaded(ws, path)) {
+        re0_error_append(errors, RE0_ERR_IO, RE0_SPAN_ZERO, NULL,
+                         "too many imported files (limit %d)", RE0_MAX_FILES);
+        return;
+    }
 
     char *source = read_file_content(path);
     if (!source) {

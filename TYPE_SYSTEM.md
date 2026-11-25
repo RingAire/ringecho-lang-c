@@ -71,6 +71,17 @@ SysV AMD64 的 INTEGER/SSE/MEMORY 分类可用于 ABI 查询，但分类器本�
 
 ## 原生后端边界
 
+### 跨目标转换与自举前端增量
+
+隐式数值转换通过 `re0_type_coercible_on(target, from, to)` 判断，
+`usize/isize` 的宽度取目标而不是宿主。C 语义检查和 native lowering
+采用同一目标映射。高低 64 位不同时为零的整数不能作为空指针常量。
+
+`compiler-reo/types.reo` 实现结构类型语法、规范打印与等价比较，
+`declarations.reo` 保留 struct/union/别名声明；它们替换前端种子中的
+指针/引用/数组/函数占位表示，但不意味着自举语义检查和后端已完整。
+执行证据及宽指针限制见 [BOOTSTRAP.md](BOOTSTRAP.md)。
+
 Native 仍为 [NATIVE.md](NATIVE.md) 中的实验性子集：8–64 位整数、
 isize/usize、char、bool、f32/f64 和 unit 返回值。其 i128、聚合值、引用、
 字符串、容器和泛型完整代码生成仍需后续扩展。C 后端此次替换完成不代表

@@ -1,0 +1,3 @@
+union Word { integer: u64, bytes: [u8; 8] }
+type Alias = Word;
+fn main() { let word = Alias { integer: 1u64, bytes: [0u8; 8] }; }

@@ -3,6 +3,7 @@
 
 #include "exec/build.h"
 #include "exec/compiler.h"
+#include "exec/kernel_build.h"
 #include "exec/venv.h"
 #include "exec/toml_config.h"
 #include "exec/workspace.h"

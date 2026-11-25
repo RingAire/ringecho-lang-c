@@ -15,7 +15,7 @@ import xml.etree.ElementTree as ET
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[2]
-TOOLS = ("rev", "rem", "rvm")
+TOOLS = ("rev", "rem")
 MACHINES = {
     "linux": {"x86": (1, 3), "x64": (2, 62), "arm64": (2, 183)},
     "windows": {"x86": 0x14C, "x64": 0x8664, "arm64": 0xAA64},
@@ -146,8 +146,9 @@ def deb_package(payload, output, arch, version, scratch):
         f"Package: ringecho\nVersion: {version.replace('-', '~', 1)}\nArchitecture: {deb_arch}\n"
         f"Maintainer: RingAire <noreply@github.com>\nDepends: {dependencies}\nRecommends: gcc\n"
         f"Section: devel\nPriority: optional\nInstalled-Size: {installed_size}\n"
-        "Description: RingEcho compiler, package manager and version manager\n"
-        " Includes rev, rem and rvm. A system C compiler is required for native code generation.\n",
+        "Description: RingEcho compiler and package manager\n"
+        " Includes rev and rem (rvm is distributed separately). A system C compiler"
+        " is required for native code generation.\n",
         encoding="utf-8")
     subprocess.run(["dpkg-deb", "--root-owner-group", "--build", str(root),
                     str(output / f"{payload.name}.deb")], check=True)

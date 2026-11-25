@@ -20,7 +20,16 @@ static Re0Stmt recursive = {.kind = STMT_STRUCT, .struct_decl = {.name = "Recurs
 static Re0Stmt typed_enum = {.kind = STMT_ENUM, .enum_decl = {.name = "Message", .variants = variants, .variant_count = 4}};
 static Re0Stmt alias = {.kind = STMT_TYPE_ALIAS, .type_alias = {.name = "Alias", .target = "Group<u16>"}};
 static Re0Stmt cycle = {.kind = STMT_TYPE_ALIAS, .type_alias = {.name = "Cycle", .target = "Cycle"}};
-static Re0Stmt *definitions[] = {&packet, &generic, &linked, &recursive, &typed_enum, &alias, &cycle};
+static Re0StructFieldDecl union_mixed_fields[] = {{"integer", "u64"}, {"real", "f64"}};
+static Re0StructFieldDecl union_float_fields[] = {{"pair", "[f64;2]"}, {"real", "f64"}};
+static Re0StructFieldDecl union_large_fields[] = {{"bytes", "[u8;17]"}, {"integer", "u64"}};
+static Re0StructFieldDecl union_recursive_fields[] = {{"value", "RecursiveUnion"}};
+static Re0Stmt union_mixed = {.kind = STMT_STRUCT, .struct_decl = {.name = "MixedChoice", .fields = union_mixed_fields, .field_count = 2, .is_union = true}};
+static Re0Stmt union_float = {.kind = STMT_STRUCT, .struct_decl = {.name = "FloatChoice", .fields = union_float_fields, .field_count = 2, .is_union = true}};
+static Re0Stmt union_large = {.kind = STMT_STRUCT, .struct_decl = {.name = "LargeChoice", .fields = union_large_fields, .field_count = 2, .is_union = true}};
+static Re0Stmt union_recursive = {.kind = STMT_STRUCT, .struct_decl = {.name = "RecursiveUnion", .fields = union_recursive_fields, .field_count = 1, .is_union = true}};
+static Re0Stmt *definitions[] = {&packet, &generic, &linked, &recursive, &typed_enum, &alias, &cycle,
+                               &union_mixed, &union_float, &union_large, &union_recursive};
 static Re0StmtVec declarations = {.data = definitions, .len = sizeof(definitions) / sizeof(definitions[0]), .cap = sizeof(definitions) / sizeof(definitions[0])};
 
 static bool primitives(Re0LayoutManager *m) {
@@ -57,6 +66,10 @@ static bool c_layout_and_abi(Re0LayoutManager *m) {
     Re0Layout *e = re0_layout_parse(m, "Message");
     REQUIRE(e && e->size == 32 && e->align == 16 && e->payload_offset == 16);
     REQUIRE(e->variant_count == 4 && e->variants[2].payload->fields[1].offset == 8);
+    union MixedChoice { uint64_t integer; double real; };
+    Re0Layout *choice = re0_layout_parse(m, "MixedChoice");
+    REQUIRE(choice && choice->size == sizeof(union MixedChoice) && choice->align == _Alignof(union MixedChoice));
+    REQUIRE(re0_layout_field(choice, "integer")->offset == 0 && re0_layout_field(choice, "real")->offset == 0);
     const struct { const char *name; Re0AbiClass a, b; bool indirect; } cases[] = {
         {"i128", RE0_ABI_INTEGER, RE0_ABI_INTEGER, false},
         {"f64", RE0_ABI_SSE, RE0_ABI_NONE, false},
@@ -66,7 +79,10 @@ static bool c_layout_and_abi(Re0LayoutManager *m) {
         {"[f64;2]", RE0_ABI_SSE, RE0_ABI_SSE, false},
         {"[u8;17]", RE0_ABI_MEMORY, RE0_ABI_NONE, true},
         {"Vec<i64>", RE0_ABI_INTEGER, RE0_ABI_NONE, false},
-        {"Result<f64,i64>", RE0_ABI_MEMORY, RE0_ABI_NONE, true}
+        {"Result<f64,i64>", RE0_ABI_MEMORY, RE0_ABI_NONE, true},
+        {"MixedChoice", RE0_ABI_INTEGER, RE0_ABI_NONE, false},
+        {"FloatChoice", RE0_ABI_SSE, RE0_ABI_SSE, false},
+        {"LargeChoice", RE0_ABI_MEMORY, RE0_ABI_NONE, true}
     };
     for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
         Re0SysvClass abi;
@@ -77,7 +93,7 @@ static bool c_layout_and_abi(Re0LayoutManager *m) {
 }
 
 static bool rejection_cases(void) {
-    const char *cases[] = {"unknown", "T", "Group", "Group<i32,u32>", "Recursive", "Cycle", "[u64;18446744073709551615]"};
+    const char *cases[] = {"unknown", "T", "Group", "Group<i32,u32>", "Recursive", "RecursiveUnion", "Cycle", "[u64;18446744073709551615]"};
     for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
         Re0LayoutManager m;
         REQUIRE(re0_layout_init(&m, &re0_target_x86_64_sysv, NULL, &declarations, NULL));

@@ -1,4 +1,5 @@
 #include "backend/backend.h"
+#include "backend/c_declaration.h"
 #include "backend/backend_c_internal.h"
 #include "backend/native.h"
 #include "backend/native_target.h"
@@ -56,6 +57,7 @@ static void emit_forward_declarations(Re0Codegen *c, Re0StmtVec *checked) {
             const char *fn_name = s->function.name;
             if (strcmp(fn_name, "main") == 0) fn_name = "main_";
             const char *ret_c = c_storage_return(s->function.ret_type);
+            re0_c_declaration_attributes_emit(c, s, false);
             re0_buffer_write_fmt(b, "%s %s(", ret_c, fn_name);
             if (s->function.param_count == 0) {
                 re0_buffer_write_str(b, "void");

@@ -1,4 +1,5 @@
 #include "base/safe.h"
+#include "base/re0_limits.h"
 #include "exec/compiler.h"
 #include "backend/native.h"
 #include "platform.h"
@@ -18,7 +19,7 @@
 #endif
 
 static void print_usage(void) {
-    printf("RingEcho Evaluator (rev) v0.3.0\n");
+    printf("RingEcho Evaluator (rev) v0.4.0\n");
     printf("Usage:\n");
     printf("  rev run <file.reo> [--target c|reo]  Compile and run\n");
     printf("  rev build [file.reo] [-o out]        Compile to executable/asm\n");
@@ -26,6 +27,10 @@ static void print_usage(void) {
     printf("  rev build [file.reo] --target wasm    Compile to WebAssembly (WASI)\n");
     printf("  rev build <file.reo> --backend native [--emit obj|exe] [-o out]\n");
     printf("    Experimental target: x86_64-unknown-linux-gnu (Linux host)\n");
+    printf("  rev build <file.reo> --kernel [--asm f.S] [--object f.o] [--linker-script f.ld]\n");
+    printf("    [--kernel-target <triple>] [--kernel-cc <cc>] [-o kernel.elf]\n");
+    printf("    --kernel --emit obj [-o module.o]   Compile a separately linked module\n");
+    printf("    Freestanding bare-metal image (default target i686-unknown-none-elf)\n");
     printf("  C flags: --include <h> --lib-dir <d> --link <l>  Host library integration\n");
     printf("  rev check <file.reo>                 Type check only\n");
     printf("  rev lsp                              Start LSP server\n");
@@ -37,10 +42,18 @@ static void print_usage(void) {
 static char *read_file(const char *path) {
     FILE *f = fopen(path, "rb");
     if (!f) return NULL;
-    fseek(f, 0, SEEK_END); long sz = ftell(f); fseek(f, 0, SEEK_SET);
-    if (sz < 0) { fclose(f); return NULL; }
+    if (fseek(f, 0, SEEK_END) != 0) { fclose(f); return NULL; }
+    long sz = ftell(f);
+    if (sz < 0 || (unsigned long)sz > RE0_MAX_SOURCE_BYTES) { fclose(f); return NULL; }
+    if (fseek(f, 0, SEEK_SET) != 0) { fclose(f); return NULL; }
     char *buf = (char*)xmalloc((size_t)sz + 1);
-    size_t rd = fread(buf, 1, (size_t)sz, f); buf[rd] = '\0'; fclose(f);
+    size_t rd = fread(buf, 1, (size_t)sz, f);
+    if (rd != (size_t)sz) { free(buf); fclose(f); return NULL; }
+    if (memchr(buf, 0, rd) != NULL) {
+        fprintf(stderr, "source contains a NUL byte: %s\n", path);
+        free(buf); fclose(f); return NULL;
+    }
+    buf[rd] = '\0'; fclose(f);
     return buf;
 }
 
@@ -236,11 +249,12 @@ int main(int argc, char **argv) {
         Re0Compiler comp;
         re0_compiler_init(&comp, &re0_backend_c);
         bool ok = re0_compiler_compile_file(&comp, entry_path, output_path);
-        if (re0_error_list_has_errors(&comp.errors))
+        bool had_errors = re0_error_list_has_errors(&comp.errors);
+        if (had_errors)
             re0_error_list_print(&comp.errors);
         re0_compiler_destroy(&comp);
-        if (ok) printf("Built: %s\n", output_path);
-        return ok ? 0 : 1;
+        if (ok && !had_errors) printf("Built: %s\n", output_path);
+        return (ok && !had_errors) ? 0 : 1;
     }
     if (strcmp(cmd, "check") == 0) {
         if (argc < 3) { fprintf(stderr, "usage: rev check <file.reo>\n"); return 1; }
@@ -283,13 +297,20 @@ int main(int argc, char **argv) {
     const char *includes[RE0_BUILD_MAX_FLAGS]; int include_count = 0;
     const char *lib_dirs[RE0_BUILD_MAX_FLAGS]; int lib_dir_count = 0;
     const char *links[RE0_BUILD_MAX_FLAGS]; int link_count = 0;
+    const char *asm_files[RE0_BUILD_MAX_FLAGS]; int asm_count = 0;
+    const char *objects[RE0_BUILD_MAX_FLAGS]; int object_count = 0;
+    const char *linker_script = NULL, *kernel_target = NULL, *kernel_cc = NULL;
+    bool kernel = false;
     for (int i = 3; i < argc; i++) {
         const char *option = argv[i];
         if (strcmp(option, "--shared") == 0) { shared = true; continue; }
+        if (strcmp(option, "--kernel") == 0) { kernel = true; continue; }
         if (strcmp(option, "--target") != 0 && strcmp(option, "--backend") != 0 &&
             strcmp(option, "--emit") != 0 && strcmp(option, "-o") != 0 &&
             strcmp(option, "--include") != 0 && strcmp(option, "--lib-dir") != 0 &&
-            strcmp(option, "--link") != 0) {
+            strcmp(option, "--link") != 0 && strcmp(option, "--asm") != 0 &&
+            strcmp(option, "--object") != 0 && strcmp(option, "--linker-script") != 0 &&
+            strcmp(option, "--kernel-target") != 0 && strcmp(option, "--kernel-cc") != 0) {
             fprintf(stderr, "unknown option: %s\n", option); return 1;
         }
         if (i + 1 == argc || !*argv[i + 1] || argv[i + 1][0] == '-') {
@@ -308,13 +329,37 @@ int main(int argc, char **argv) {
         } else if (strcmp(option, "--link") == 0) {
             if (link_count >= RE0_BUILD_MAX_FLAGS) { fprintf(stderr, "too many --link\n"); return 1; }
             links[link_count++] = value;
-        } else { output = value; explicit_output = true; }
+        } else if (strcmp(option, "--asm") == 0) {
+            if (asm_count >= RE0_BUILD_MAX_FLAGS) { fprintf(stderr, "too many --asm\n"); return 1; }
+            asm_files[asm_count++] = value;
+        } else if (strcmp(option, "--object") == 0) {
+            if (object_count >= RE0_BUILD_MAX_FLAGS) { fprintf(stderr, "too many --object\n"); return 1; }
+            objects[object_count++] = value;
+        } else if (strcmp(option, "--linker-script") == 0) linker_script = value;
+        else if (strcmp(option, "--kernel-target") == 0) kernel_target = value;
+        else if (strcmp(option, "--kernel-cc") == 0) kernel_cc = value;
+        else { output = value; explicit_output = true; }
     }
     if (backend_name) {
         if (strcmp(backend_name, "native") == 0) backend = &re0_backend_native;
         else if (strcmp(backend_name, "c") != 0) {
             fprintf(stderr, "unknown backend: %s\n", backend_name); return 1;
         }
+    }
+    if (kernel) {
+        if (target_name && strcmp(target_name, "c") && strcmp(target_name, "c-freestanding")) {
+            fprintf(stderr, "--kernel requires the C backend; use --kernel-target for the machine triple\n"); return 1;
+        }
+        if (backend == &re0_backend_native) {
+            fprintf(stderr, "--kernel cannot be combined with --backend native\n"); return 1;
+        }
+        if (strcmp(cmd, "run") == 0) {
+            fprintf(stderr, "--kernel only supports the 'build' command\n"); return 1;
+        }
+        if (shared || wasm) {
+            fprintf(stderr, "--kernel cannot be combined with --shared or the wasm target\n"); return 1;
+        }
+        if (!explicit_output) output = "kernel.elf";
     }
     bool emit_object = emit_name && strcmp(emit_name, "obj") == 0;
     const Re0NativeTarget *native_target = NULL;
@@ -334,7 +379,10 @@ int main(int argc, char **argv) {
         }
         if (emit_object && !explicit_output) output = "output.o";
     } else {
-        if (emit_name) { fprintf(stderr, "--emit currently requires --backend native\n"); return 1; }
+        if (emit_name && (!kernel || (!emit_object && strcmp(emit_name, "exe")))) {
+            fprintf(stderr, "--emit requires --backend native or --kernel (obj|exe)\n"); return 1;
+        }
+        if (kernel && emit_object && !explicit_output) output = "kernel.o";
         if (target_name) {
             if (strcmp(target_name, "reo") == 0) {
                 backend = &re0_backend_reo;
@@ -356,15 +404,34 @@ int main(int argc, char **argv) {
     for (int i = 0; i < include_count; i++) (void)re0_build_add_include(&comp.build, includes[i]);
     for (int i = 0; i < lib_dir_count; i++) (void)re0_build_add_lib_dir(&comp.build, lib_dirs[i]);
     for (int i = 0; i < link_count; i++) (void)re0_build_add_link(&comp.build, links[i]);
+    comp.build.kernel.enabled = kernel;
+    comp.build.kernel.emit_object = kernel && emit_object;
+    if (kernel) {
+        comp.build.kernel.cc = kernel_cc;
+        comp.build.kernel.target = kernel_target;
+        re0_kernel_build_set_linker_script(&comp.build.kernel, linker_script);
+        bool valid_inputs = true;
+        for (int i = 0; i < asm_count; i++)
+            if (!re0_kernel_build_add_asm(&comp.build.kernel, asm_files[i])) valid_inputs = false;
+        for (int i = 0; i < object_count; i++)
+            if (!re0_kernel_build_add_object(&comp.build.kernel, objects[i])) valid_inputs = false;
+        if (!valid_inputs) {
+            re0_error_append(&comp.errors, RE0_ERR_IO, RE0_SPAN_ZERO, NULL,
+                             "invalid kernel input path; response files/options are not inputs (use ./ or an absolute file path)");
+            re0_error_list_print(&comp.errors);
+            re0_compiler_destroy(&comp); return 1;
+        }
+    }
 
     bool ok = false;
     if (strcmp(cmd, "run") == 0) ok = re0_compiler_run(&comp, path);
     else if (strcmp(cmd, "build") == 0) ok = re0_compiler_compile_file(&comp, path, output);
     else { print_usage(); re0_compiler_destroy(&comp); return 1; }
 
-    if (re0_error_list_has_errors(&comp.errors))
+    if (re0_error_list_has_errors(&comp.errors) || re0_error_list_has_warnings(&comp.errors))
         re0_error_list_print(&comp.errors);
 
+    bool had_errors = re0_error_list_has_errors(&comp.errors);
     re0_compiler_destroy(&comp);
-    return ok ? 0 : 1;
+    return (ok && !had_errors) ? 0 : 1;
 }

@@ -6,7 +6,7 @@ import sys
 
 SYSTEM_DLLS = {"kernel32.dll", "ntdll.dll", "advapi32.dll", "user32.dll", "shell32.dll",
                "ws2_32.dll", "bcrypt.dll", "ole32.dll", "ucrtbase.dll", "msvcrt.dll"}
-for tool in ("rev", "rem", "rvm"):
+for tool in ("rev", "rem"):
     path = Path(sys.argv[1]) / (tool + ".exe")
     result = subprocess.run(["llvm-readobj", "--coff-imports", str(path)], check=True,
                             capture_output=True, text=True)

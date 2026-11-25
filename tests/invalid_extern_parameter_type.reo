@@ -1,0 +1,2 @@
+extern { fn missing(value: MissingType); }
+fn main() {}

@@ -15,6 +15,7 @@ class CPointerTests(unittest.TestCase):
 fn read(p: &i64) -> i64 { return *p; }
 fn next(p: &mut i64) -> i64 { return *p + 1; }
 fn read_byte(p: &u8) -> u8 { return *p; }
+fn write(p: &mut u8) { *p = 7u8; }
 fn main() {
     let value: i64 = 40;
     let byte: u8 = 255u8;
@@ -24,6 +25,11 @@ fn main() {
     assert(read(p) == 40);
     assert(next(q) == 41);
     assert(read_byte(r) == 255u8);
+    write(&mut byte);
+    assert(byte == 7u8);
+    assert(path_isdir("."));
+    assert(!path_isdir("pointer.reo"));
+    assert(!path_isdir("missing-test-directory"));
 }
 '''
         with tempfile.TemporaryDirectory(prefix="reo-typed-pointer-") as directory:

@@ -1,5 +1,6 @@
 #include "base/safe.h"
 #include "analysis/sema.h"
+#include "analysis/atomic.h"
 #include "analysis/layout.h"
 #include <stdlib.h>
 #include <string.h>
@@ -42,7 +43,7 @@ static Re0Type *resolve_type(Re0Sema *s, const char *name) {
 /* assignability (from -> to): real type checking.
  * numeric widens; UNKNOWN/TYPEVAR/NEVER/UNIT targets are lenient;
  * everything else must be structurally equal. */
-static bool sema_assignable(Re0Type *from, Re0Type *to) {
+static bool sema_assignable(Re0Sema *s, Re0Type *from, Re0Type *to) {
     if (!from || !to) return true;
     if (from->kind == RE0_TYPE_UNKNOWN || to->kind == RE0_TYPE_UNKNOWN) return true;
     if (from->kind == RE0_TYPE_TYPEVAR || to->kind == RE0_TYPE_TYPEVAR) return true;
@@ -53,14 +54,14 @@ static bool sema_assignable(Re0Type *from, Re0Type *to) {
     if (to->kind == RE0_TYPE_PTR && !to->ptr_.inner &&
         (from->kind == RE0_TYPE_PTR || from->kind == RE0_TYPE_REFERENCE ||
          from->kind == RE0_TYPE_STR))
-        return true;
-    return re0_type_coercible(from, to); /* equal or numeric conversion */
+        return from->kind != RE0_TYPE_PTR || !from->is_volatile || to->is_volatile;
+    return re0_type_coercible_on(s->target, from, to);
 }
 
 /* A literal `0` is the null pointer constant. */
 static bool is_int_zero(const Re0Expr *e) {
     return e && e->kind == EXPR_INT && !e->int_lit.suffix &&
-           !e->int_lit.integer.negative && e->int_lit.integer.low == 0;
+           !e->int_lit.integer.negative && e->int_lit.integer.high == 0 && e->int_lit.integer.low == 0;
 }
 
 static bool sema_assignable_expr(Re0Sema *s, Re0Type *from, Re0Type *to, Re0Expr *expr) {
@@ -75,7 +76,7 @@ static bool sema_assignable_expr(Re0Sema *s, Re0Type *from, Re0Type *to, Re0Expr
         double value = expr->float_lit.val;
         return value <= FLT_MAX && value >= -FLT_MAX && (double)(float)value == value;
     }
-    return sema_assignable(from, to);
+    return sema_assignable(s, from, to);
 }
 
 static int sema_cap_count(Re0Sema *s, Re0Span span, int count, int limit, const char *what) {
@@ -182,7 +183,11 @@ static Re0Type *call_result_type(Re0Sema *s,Re0Type *ret,Re0Type *fn,Re0Expr *ca
     }
     if(ret->kind==RE0_TYPE_REFERENCE) return re0_type_make_reference(call_result_type(s,ret->ref_.inner,fn,call,depth+1),ret->ref_.mutable_,NULL);
     if(ret->kind==RE0_TYPE_PTR && ret->ptr_.inner) {
-        Re0Type *p=re0_type_make(RE0_TYPE_PTR,NULL);p->ptr_.inner=call_result_type(s,ret->ptr_.inner,fn,call,depth+1);p->ptr_.mutable_=ret->ptr_.mutable_;return p;
+        Re0Type *p=re0_type_make(RE0_TYPE_PTR,NULL);
+        p->ptr_.inner=call_result_type(s,ret->ptr_.inner,fn,call,depth+1);
+        p->ptr_.mutable_=ret->ptr_.mutable_;
+        p->is_volatile=ret->is_volatile;
+        return p;
     }
     if(ret->kind==RE0_TYPE_ARRAY) return re0_type_make_array(call_result_type(s,ret->array.inner,fn,call,depth+1),ret->array.size,NULL);
     if(ret->kind==RE0_TYPE_SLICE) return re0_type_make_slice(call_result_type(s,ret->slice.inner,fn,call,depth+1),NULL);
@@ -721,6 +726,7 @@ static Re0Type *infer_type_impl(Re0Sema *s, Re0Expr *e) {
                 infer_type(s, e->call.args[ai]);
             if(e->call.callee && e->call.callee->kind==EXPR_IDENT) {
                 const char *name=e->call.callee->ident.name;
+                if (re0_atomic_name(name)) return re0_atomic_check(s, e);
                 if(strcmp(name,"free")==0) {
                     Re0Type *value=e->call.arg_count==1?e->call.args[0]->resolved_type:NULL;
                     if(!value || (value->kind!=RE0_TYPE_STR && value->kind!=RE0_TYPE_PTR && value->kind!=RE0_TYPE_VEC && value->kind!=RE0_TYPE_SLICE) || e->call.args[0]->borrows_local) {
@@ -922,12 +928,18 @@ static Re0Type *infer_type_impl(Re0Sema *s, Re0Expr *e) {
             return last ? last : re0_type_make(RE0_TYPE_UNIT, NULL);
         }
         case EXPR_STRUCT_INIT: {
-            Re0Type *t = re0_type_make(RE0_TYPE_STRUCT, NULL);
-            t->named.name = strdup(e->struct_init.name);
+            Re0Type *resolved = resolve_type(s, e->struct_init.name);
+            Re0Type *t = resolved && resolved->kind == RE0_TYPE_STRUCT ? resolved :
+                         re0_type_make_named(RE0_TYPE_STRUCT, e->struct_init.name, NULL);
             /* field validation (known non-generic structs only):
              * extra fields / missing fields / type mismatches */
-            Re0StructDef *sd = re0_model_find_struct(s->model, e->struct_init.name);
+            Re0StructDef *sd = re0_model_find_struct(s->model, t->named.name);
             if (sd) {
+                if (sd->is_union && e->struct_init.field_count != 1) {
+                    re0_error_append(s->errors, RE0_ERR_SEMANTIC, e->span, NULL,
+                                     "union initializer requires exactly one active member");
+                    s->had_error = true;
+                }
                 for (int i = 0; i < e->struct_init.field_count; i++) {
                     const char *fn = e->struct_init.fields[i].field;
                     Re0Expr *val = e->struct_init.fields[i].value;
@@ -953,7 +965,7 @@ static Re0Type *infer_type_impl(Re0Sema *s, Re0Expr *e) {
                         s->had_error = true;
                     }
                 }
-                for (int j = 0; j < sd->field_count; j++) {
+                for (int j = 0; !sd->is_union && j < sd->field_count; j++) {
                     const char *dn = sd->fields[j].name;
                     int found = 0;
                     for (int i = 0; i < e->struct_init.field_count; i++)
@@ -1324,6 +1336,11 @@ static void check_stmt_inner(Re0Sema *s,Re0Stmt *stmt) {
 }
 static void check_stmt_impl(Re0Sema *s, Re0Stmt *stmt) {
     if (!stmt) return;
+    if (s->fn_depth && (stmt->declaration.section || stmt->declaration.used || stmt->declaration.weak)) {
+        re0_error_append(s->errors, RE0_ERR_SEMANTIC, stmt->span, NULL,
+                         "section/used/weak are only supported on file-scope definitions");
+        s->had_error = true;
+    }
     switch (stmt->kind) {
         case STMT_ATTRIBUTE: check_stmt_inner(s,stmt->attribute.inner);break;
         case STMT_PUB: check_stmt_inner(s,stmt->pub.inner);break;
@@ -1580,6 +1597,11 @@ static void check_stmt_impl(Re0Sema *s, Re0Stmt *stmt) {
             break;
         }
         case STMT_STRUCT: {
+            if (stmt->struct_decl.is_union && stmt->struct_decl.type_param_count) {
+                re0_error_append(s->errors, RE0_ERR_SEMANTIC, stmt->span, NULL,
+                                 "generic union declarations are not supported");
+                s->had_error = true;
+            }
             if (!re0_model_find_struct(s->model, stmt->struct_decl.name)) {
                 char *field_names[64], *field_types[64];
                 int n = stmt->struct_decl.field_count;
@@ -1592,6 +1614,7 @@ static void check_stmt_impl(Re0Sema *s, Re0Stmt *stmt) {
                                          field_names, field_types, n);
                 Re0StructDef *sd = re0_model_find_struct(s->model, stmt->struct_decl.name);
                 if (sd) {
+                    sd->is_union = stmt->struct_decl.is_union;
                     for (int j = 0; j < sd->field_count; j++)
                         re0_sema_own_type(s, sd->fields[j].type);
                 }
@@ -1604,7 +1627,7 @@ static void check_stmt_impl(Re0Sema *s, Re0Stmt *stmt) {
                     re0_model_set_struct_layout(sd, stmt->struct_decl.packed,
                                                 stmt->struct_decl.explicit_align,
                                                 stmt->struct_decl.transparent);
-                    if (stmt->struct_decl.packed || stmt->struct_decl.explicit_align ||
+                    if (stmt->struct_decl.is_union || stmt->struct_decl.packed || stmt->struct_decl.explicit_align ||
                         stmt->struct_decl.transparent) {
                         uint64_t dummy = 0;
                         if (!sema_layout_query(s, stmt->struct_decl.name, NULL, false, &dummy))
@@ -1632,12 +1655,22 @@ static void check_stmt_impl(Re0Sema *s, Re0Stmt *stmt) {
                 int param_count = decl->param_count;
                 param_count = sema_cap_count(s, stmt->span, param_count, 64, "parameters");
                 for (int j = 0; j < param_count; j++) {
-                    params[j] = re0_model_std_type(decl->params[j].ptype);
-                    if (!params[j]) params[j] = re0_type_make(RE0_TYPE_UNKNOWN, NULL);
+                    params[j] = resolve_type(s, decl->params[j].ptype);
+                    if (!params[j]) {
+                        re0_error_append(s->errors, RE0_ERR_SEMANTIC, stmt->span, NULL,
+                                         "unknown external parameter type '%s'", decl->params[j].ptype ? decl->params[j].ptype : "<missing>");
+                        s->had_error = true;
+                        params[j] = re0_type_make(RE0_TYPE_UNKNOWN, NULL);
+                    }
                 }
                 Re0Type *ret = decl->ret_type
-                    ? re0_model_std_type(decl->ret_type) : NULL;
-                if (!ret) ret = re0_type_make(RE0_TYPE_UNIT, NULL);
+                    ? resolve_type(s, decl->ret_type) : re0_type_make(RE0_TYPE_UNIT, NULL);
+                if (!ret) {
+                    re0_error_append(s->errors, RE0_ERR_SEMANTIC, stmt->span, NULL,
+                                     "unknown external return type '%s'", decl->ret_type);
+                    s->had_error = true;
+                    ret = re0_type_make(RE0_TYPE_UNKNOWN, NULL);
+                }
                 Re0Type *fn_type = re0_type_make_func(params, param_count, ret,
                                                        decl->variadic, NULL);
                 if (!fn_type) {
@@ -1929,6 +1962,12 @@ static void register_global_depth(Re0Sema *s, Re0StmtVec *stmts,unsigned depth,u
             }
             if(pass==1) re0_model_register_struct(s->model,name,field_names,field_types,n);
             Re0StructDef *sd = re0_model_find_struct(s->model,name);
+            if (sd && !component) {
+                sd->is_union = stmt->struct_decl.is_union;
+                re0_model_set_struct_layout(sd, stmt->struct_decl.packed,
+                                           stmt->struct_decl.explicit_align,
+                                           stmt->struct_decl.transparent);
+            }
             if (pass==2 && sd) {
                 Re0Stmt context={.kind=STMT_FUNCTION};
                 if(!component) {context.function.type_params=stmt->struct_decl.type_params;context.function.type_param_count=stmt->struct_decl.type_param_count;}

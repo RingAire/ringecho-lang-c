@@ -6,69 +6,42 @@
  * serialization and self-hosting. Names are interned; lists (block statements,
  * parameters, call arguments) are contiguous ranges in `items`.
  *
- * This is one file on purpose while the frontend is small; it will be split
- * once compiler-reo can compile multiple modules. */
+ * Shared storage and structural types live in dependency modules; expression
+ * parsing, resolution and the initial checker remain in this driver. */
 
 /* ── node kinds ──
  * 0 Int  1 Ident  2 Unary  3 Binary  4 Call  5 Block  6 Let  7 Return
  * 8 ExprStmt  9 If  10 Fn  11 Param  14 Tail
  * types (kind 12 Type): a = type code, b = inner/named
  */
-static TUnit: i64 = 0;
-static TNever: i64 = 1;
-static TBool: i64 = 2;
-static TI8: i64 = 3;
-static TI16: i64 = 4;
-static TI32: i64 = 5;
-static TI64: i64 = 6;
-static TI128: i64 = 7;
-static TIsize: i64 = 8;
-static TU8: i64 = 9;
-static TU16: i64 = 10;
-static TU32: i64 = 11;
-static TU64: i64 = 12;
-static TU128: i64 = 13;
-static TUsize: i64 = 14;
-static TF32: i64 = 15;
-static TF64: i64 = 16;
-static TChar: i64 = 17;
-static TStr: i64 = 18;
-static TPtr: i64 = 19;
-static TNamed: i64 = 20;
-static TAny: i64 = 88;
+import "types"
+import "declarations"
+import "type_tests"
 
 fn set_name(code: i64) -> i64 { return code; }
 
 /* ── diagnostics ── */
-static errors: svec;
-static error_count: i64;
 fn report(message: str) {
+    if error_count >= (FrontendErrorLimit) { return; }
     svec_push(errors, message);
     error_count += 1;
 }
 
 /* ── token storage ── */
-static tkind: svec;   /* "I" ident, "N" number, "S" symbol */
-static ttext: svec;
-static toff: vec;     /* byte offset */
-static tlen: vec;     /* byte length */
-static pos: i64;
 
 /* ── AST storage ── */
-static nodes: vec;    /* 6 i64 per node */
-static names: svec;
-static items: vec;    /* contiguous child ranges */
-static types: vec;    /* resolved type code per node */
 
 fn is_name_start(c: char) -> bool { return is_alpha(c); }
 fn is_name_part(c: char) -> bool { return is_alpha(c) || is_digit(c); }
 
 fn scan(source: str) {
     let n: i64 = len(source);
+    if n > (FrontendSourceLimit) { report("source size limit exceeded"); return; }
     let i: i64 = 0;
     while i < n {
+        if token_count() >= (FrontendTokenLimit) { report("token limit exceeded"); return; }
         let c: char = str_char_at(source, i);
-        if c == ' ' || c == '\n' || c == '\t' {
+        if c == ' ' || c == '\n' || c == '\r' || c == '\t' {
             i += 1;
         } else if c == '/' && i + 1 < n && str_char_at(source, i + 1) == '*' {
             i += 2;
@@ -76,6 +49,7 @@ fn scan(source: str) {
                                  str_char_at(source, i + 1) == '/') {
                 i += 1;
             }
+            if i + 1 >= n { report("unterminated block comment"); return; }
             i += 2;
         } else if c == '/' && i + 1 < n && str_char_at(source, i + 1) == '/' {
             while i < n && str_char_at(source, i) != '\n' { i += 1; }
@@ -107,6 +81,7 @@ fn scan(source: str) {
                 else if d == '"' { closed = 1; }
                 else { j += 1; }
             }
+            if closed == 0 { report("unterminated string literal"); return; }
             svec_push(tkind, "Str");
             svec_push(ttext, str_slice(source, start, j));
             vec_push(toff, i);
@@ -117,6 +92,7 @@ fn scan(source: str) {
             let j: i64 = start;
             if j < n && str_char_at(source, j) == '\\' { j += 2; }
             else { j += 1; }
+            if j >= n || str_char_at(source, j) != '\'' { report("unterminated character literal"); return; }
             svec_push(tkind, "C");
             svec_push(ttext, str_slice(source, start, j));
             vec_push(toff, i);
@@ -171,70 +147,6 @@ fn set_type(i: i64, t: i64) { vec_set(types, i, t); }
 fn list_push(value: i64) { vec_push(items, value); }
 fn list_at(start: i64, i: i64) -> i64 { return vec_get(items, start + i); }
 
-/* ── type parsing ── */
-fn type_code(text: str) -> i64 {
-    if str_eq(text, "unit") || str_eq(text, "()") { return TUnit; }
-    if str_eq(text, "never") || str_eq(text, "!") { return TNever; }
-    if str_eq(text, "bool") { return TBool; }
-    if str_eq(text, "i8") { return TI8; }
-    if str_eq(text, "i16") { return TI16; }
-    if str_eq(text, "i32") { return TI32; }
-    if str_eq(text, "i64") { return TI64; }
-    if str_eq(text, "i128") { return TI128; }
-    if str_eq(text, "isize") { return TIsize; }
-    if str_eq(text, "u8") { return TU8; }
-    if str_eq(text, "u16") { return TU16; }
-    if str_eq(text, "u32") { return TU32; }
-    if str_eq(text, "u64") { return TU64; }
-    if str_eq(text, "u128") { return TU128; }
-    if str_eq(text, "usize") { return TUsize; }
-    if str_eq(text, "f32") { return TF32; }
-    if str_eq(text, "f64") { return TF64; }
-    if str_eq(text, "char") { return TChar; }
-    if str_eq(text, "str") { return TStr; }
-    if str_eq(text, "ptr") { return TPtr; }
-    return TNamed;
-}
-
-fn parse_type() -> i64 {
-    if at("&") {
-        pos += 1;
-        let m: i64 = 0;
-        if at("mut") { pos += 1; m = 1; }
-        return node(12, TStr, m, -1, -1, -1); /* reference placeholder */
-    }
-    if at("*") {
-        pos += 1;
-        if at("const") { pos += 1; }
-        else if at("mut") { pos += 1; }
-        return node(12, TPtr, -1, -1, -1, -1);
-    }
-    if at("[") {
-        pos += 1;
-        let inner: i64 = parse_type();
-        pos += 1; /* ']' (element or '; N' simplified) */
-        return node(12, TPtr, inner, -1, -1, -1);
-    }
-    if at("fn") {
-        pos += 1;
-        return node(12, TNamed, intern("fn"), -1, -1, -1);
-    }
-    if at("(") {
-        pos += 1;
-        if at(")") { pos += 1; return node(12, TUnit, -1, -1, -1, -1); }
-        pos += 1;
-        return node(12, TUnit, -1, -1, -1, -1);
-    }
-    if at_ident() {
-        let text: str = tok_text(pos);
-        pos += 1;
-        let code: i64 = type_code(text);
-        if code == (TNamed) { return node(12, TNamed, intern(text), -1, -1, -1); }
-        return node(12, code, -1, -1, -1, -1);
-    }
-    return node(12, TNamed, intern("unknown"), -1, -1, -1);
-}
-
 /* ── expressions ── */
 fn precedence_of(op: str) -> i64 {
     if str_eq(op, "||") { return 1; }
@@ -276,6 +188,7 @@ fn parse_args() -> i64 {
     let count: i64 = 0;
     if at(")") {
         pos += 1;
+        free(collected);
         return node(4, -1, vec_len(items), 0, -1, -1);
     }
     while true {
@@ -286,6 +199,7 @@ fn parse_args() -> i64 {
     }
     pos += 1; /* ')' */
     let start: i64 = commit_list(collected, count);
+    free(collected);
     return node(4, -1, start, count, -1, -1);
 }
 
@@ -364,6 +278,7 @@ fn parse_block() -> i64 {
     if !at("}") { report("expected '}'"); }
     pos += 1; /* '}' */
     let start: i64 = commit_list(collected, count);
+    free(collected);
     return node(5, start, count, -1, -1, -1);
 }
 
@@ -437,6 +352,7 @@ fn parse_params() -> i64 {
     let count: i64 = 0;
     if at(")") {
         pos += 1;
+        free(collected);
         return node(11, vec_len(items), 0, -1, -1, -1);
     }
     while true {
@@ -452,6 +368,7 @@ fn parse_params() -> i64 {
     if !at(")") { report("expected ')' in parameter list"); }
     pos += 1; /* ')' */
     let start: i64 = commit_list(collected, count);
+    free(collected);
     return node(11, start, count, -1, -1, -1);
 }
 
@@ -481,6 +398,7 @@ fn parse_enum() -> i64 {
     }
     if at("}") { pos += 1; }
     let start: i64 = commit_list(collected, count);
+    free(collected);
     return node(19, name_index, start, count, -1, -1);
 }
 
@@ -494,12 +412,19 @@ fn parse_program() -> i64 {
         } else if at("enum") {
             vec_push(collected, parse_enum());
             count += 1;
+        } else if at("struct") || at("union") {
+            vec_push(collected, parse_record());
+            count += 1;
+        } else if at("type") {
+            vec_push(collected, parse_type_alias());
+            count += 1;
         } else {
             report("expected declaration");
             pos += 1;
         }
     }
     let start: i64 = commit_list(collected, count);
+    free(collected);
     return node(5, start, count, -1, -1, -1);
 }
 
@@ -524,29 +449,6 @@ fn dump_names(start: i64, count: i64) -> str {
         i += 1;
     }
     return result;
-}
-fn dump_type(t: i64) -> str {
-    if t < 0 { return "unit"; }
-    let code: i64 = na(t);
-    if code == (TUnit) { return "unit"; }
-    if code == (TBool) { return "bool"; }
-    if code == (TI8) { return "i8"; }
-    if code == (TI16) { return "i16"; }
-    if code == (TI32) { return "i32"; }
-    if code == (TI64) { return "i64"; }
-    if code == (TIsize) { return "isize"; }
-    if code == (TU8) { return "u8"; }
-    if code == (TU16) { return "u16"; }
-    if code == (TU32) { return "u32"; }
-    if code == (TU64) { return "u64"; }
-    if code == (TUsize) { return "usize"; }
-    if code == (TF32) { return "f32"; }
-    if code == (TF64) { return "f64"; }
-    if code == (TChar) { return "char"; }
-    if code == (TStr) { return "str"; }
-    if code == (TPtr) { return "ptr"; }
-    if code == (TNever) { return "never"; }
-    return svec_get(names, nb(t));
 }
 fn dump(n: i64) -> str {
     let kind: i64 = nkind(n);
@@ -608,6 +510,15 @@ fn dump(n: i64) -> str {
         return str_concat("(enum ", str_concat(svec_get(names, na(n)),
                str_concat(dump_names(nb(n), nc(n)), ")")));
     }
+    if kind == 20 || kind == 21 {
+        let prefix: str = if kind == 21 { "(union " } else { "(struct " };
+        return str_concat(prefix, str_concat(svec_get(names, na(n)),
+               str_concat(" (", str_concat(dump_list(nb(n), nc(n), " "), "))"))));
+    }
+    if kind == 22 {
+        return str_concat("(type ", str_concat(svec_get(names, na(n)),
+               str_concat(" = ", str_concat(dump_type(nb(n)), ")"))));
+    }
     return "?";
 }
 fn op_name(code: i64) -> str {
@@ -629,28 +540,33 @@ fn assign_op(code: i64) -> str {
     if code == 1 { return "+="; }
     return "-=";
 }
-/* ── name resolution (stable ids; no pointer identity) ──
- * symbols: name + kind (0 fn, 1 param, 2 local). Scopes are not nested beyond
- * function scope for this slice; a function's parameters and locals share a
- * namespace, and top-level functions are visible everywhere. */
+/* Stable symbol records plus a stack of active ids. Leaving a scope removes
+ * visibility without changing ids or retaining borrowed container pointers. */
 static sym_name: svec;
 static sym_kind: vec;
 static scope_start: vec;
-fn scope_enter() { vec_push(scope_start, svec_len(sym_name)); }
-fn scope_exit() { let dropped: i64 = vec_pop(scope_start); }
+static active_symbols: vec;
+fn scope_enter() { vec_push(scope_start, vec_len(active_symbols)); }
+fn scope_exit() {
+    let start: i64 = vec_pop(scope_start);
+    while vec_len(active_symbols) > start { vec_pop(active_symbols); }
+}
 fn declare(name: str, kind: i64) {
     let i: i64 = vec_get(scope_start, vec_len(scope_start) - 1);
-    while i < svec_len(sym_name) {
-        if str_eq(svec_get(sym_name, i), name) && vec_get(sym_kind, i) == kind {
+    while i < vec_len(active_symbols) {
+        let symbol: i64 = vec_get(active_symbols, i);
+        if str_eq(svec_get(sym_name, symbol), name) && vec_get(sym_kind, symbol) == kind {
             report(str_concat("duplicate declaration: ", name));
             return;
         }
         i += 1;
     }
+    vec_push(active_symbols, svec_len(sym_name));
     svec_push(sym_name, name);
     vec_push(sym_kind, kind);
 }
 fn declare_builtin(name: str) {
+    vec_push(active_symbols, svec_len(sym_name));
     svec_push(sym_name, name);
     vec_push(sym_kind, 0);
 }
@@ -674,10 +590,10 @@ fn builtins() {
     declare_builtin("path_base"); declare_builtin("path_isdir"); declare_builtin("proc_run");
 }
 fn declared(name: str) -> bool {
-    let i: i64 = 0;
-    while i < svec_len(sym_name) {
-        if str_eq(svec_get(sym_name, i), name) { return true; }
-        i += 1;
+    let i: i64 = vec_len(active_symbols);
+    while i > 0 {
+        i -= 1;
+        if str_eq(svec_get(sym_name, vec_get(active_symbols, i)), name) { return true; }
     }
     return false;
 }
@@ -708,6 +624,7 @@ fn resolve_block(n: i64) {
 }
 fn resolve_stmt(n: i64) {
     let kind: i64 = nkind(n);
+    if kind == 5 { resolve_block(n); return; }
     if kind == 6 {
         if nc(n) >= 0 { resolve_expr(nc(n)); }
         declare(svec_get(names, na(n)), 2);
@@ -741,8 +658,10 @@ fn resolve_program(program: i64) {
                 declare(svec_get(names, list_at(nb(decl), v)), 3);
                 v += 1;
             }
-        } else {
+        } else if nkind(decl) == 10 {
             declare(svec_get(names, na(decl)), 0);
+        } else {
+            declare(svec_get(names, na(decl)), 4);
         }
         i += 1;
     }
@@ -801,6 +720,7 @@ fn type_expr(n: i64) -> i64 {
 }
 fn check_stmt(n: i64, ret: i64) {
     let kind: i64 = nkind(n);
+    if kind == 5 { check_block(n, ret); return; }
     if kind == 6 {
         if nb(n) >= 0 {
             let want: i64 = na(nb(n));
@@ -851,12 +771,23 @@ fn check_program(program: i64) {
 
 /* ── driver ── */
 static source: str;
+static state_ready: bool;
+fn destroy_state() {
+    if !state_ready { return; }
+    free(tkind); free(ttext); free(toff); free(tlen);
+    free(nodes); free(names); free(items); free(types);
+    free(errors); free(sym_name); free(sym_kind); free(scope_start); free(active_symbols);
+    state_ready = false;
+}
 fn reset() {
+    destroy_state();
     tkind = svec_new(); ttext = svec_new(); toff = vec_new(); tlen = vec_new();
     nodes = vec_new(); names = svec_new(); items = vec_new(); types = vec_new();
     errors = svec_new(); sym_name = svec_new(); sym_kind = vec_new();
+    active_symbols = vec_new();
     scope_start = vec_new(); vec_push(scope_start, 0);
     error_count = 0; pos = 0;
+    state_ready = true;
 }
 fn analyze(text: str) -> i64 {
     reset();
@@ -879,7 +810,28 @@ fn error_text() -> str {
 }
 fn token_span(i: i64) -> i64 { return vec_get(toff, i); }
 
+fn require_clean(phase: str) {
+    if error_count != 0 {
+        println(str_concat(phase, str_concat(": ", error_text())));
+        exit(1);
+    }
+}
+
 fn main() {
+    if argv_len() > 1 {
+        if argv_len() != 3 || !str_eq(argv_get(1), "--type") {
+            println("usage: frontend --type TYPE"); exit(2);
+        }
+        reset(); scan(argv_get(2));
+        let parsed: i64 = parse_type();
+        if pos != token_count() { report("unexpected trailing type tokens"); }
+        require_clean("type");
+        println(dump_type(parsed));
+        destroy_state();
+        return;
+    }
+    selftest_types();
+    selftest_type_declarations();
     let calc: str =
         "fn calc(x: i32) -> i32 {\n" +
         "    let y = 1 + 2 * 3;\n" +
@@ -889,7 +841,7 @@ fn main() {
         "    y\n" +
         "}\n";
     let program: i64 = analyze(calc);
-    assert(error_count == 0);
+    require_clean("arithmetic");
     assert(dump_program(program) ==
         "(block (fn calc (x: i32) -> i32 (block (let y = (+ 1 (* 2 3))) (if (> x y) (block (return x))) (tail y))))");
 
@@ -898,7 +850,7 @@ fn main() {
         "fn add(a: i32, b: i32) -> i32 { return a + b; }\n" +
         "fn main() -> i32 { return add(1, 2); }\n";
     let p2: i64 = analyze(two);
-    assert(error_count == 0);
+    require_clean("calls");
 
     /* string/char literals and logical operators (precedence: || < && < cmp) */
     let lits: str =
@@ -906,7 +858,7 @@ fn main() {
         "fn g(a: bool, b: bool) -> bool { return !a || b && a; }\n" +
         "fn h(c: char) -> bool { return c == 'a'; }\n";
     let p3: i64 = analyze(lits);
-    assert(error_count == 0);
+    require_clean("literals");
     assert(dump_program(p3) ==
         "(block (fn f () -> str (block (return \"hi\"))) (fn g (a: bool b: bool) -> bool (block (return (|| (not a) (&& b a))))) (fn h (c: char) -> bool (block (return (== c 'a')))))");
 
@@ -922,7 +874,7 @@ fn main() {
         "    total\n" +
         "}\n";
     let p4: i64 = analyze(loop);
-    assert(error_count == 0);
+    require_clean("loops");
     assert(dump_program(p4) ==
         "(block (fn sum (n: i64) -> i64 (block (let i: i64 = 0) (let total: i64 = 0) (while (< i n) (block (assign total += i) (assign i += 1))) (tail total))))");
 
@@ -931,7 +883,7 @@ fn main() {
         "enum TokKind { Ident, Number, Symbol, Eof }\n" +
         "fn id(x: i64) -> i64 { return x; }\n";
     let p5: i64 = analyze(edecl);
-    assert(error_count == 0);
+    require_clean("enums");
     assert(dump_program(p5) ==
         "(block (enum TokKind Ident Number Symbol Eof) (fn id (x: i64) -> i64 (block (return x))))");
 
@@ -939,15 +891,24 @@ fn main() {
     let probe: str = file_read("compiler-reo/lexer.reo");
     let p6: i64 = analyze(probe);
     assert(token_count() > 0);
-    assert(error_count == 0);
+    require_clean("lexer self-consumption");
 
     /* diagnostics: unresolved name and duplicate parameter */
     analyze("fn f() -> i32 { return missing; }\n");
     assert(error_count > 0);
     analyze("fn g(a: i32, a: i32) -> i32 { return a; }\n");
     assert(error_count > 0);
+    analyze("fn first() { let private = 1; } fn second() { private; }");
+    assert(error_count > 0);
+    analyze("fn f() { { let hidden = 1; } hidden; }");
+    assert(error_count > 0);
+    analyze("fn f() { if 1 == 1 {} else { missing; } }");
+    assert(error_count > 0);
+    analyze("fn f(value: i64) { { let value = 1; } return value; }");
+    require_clean("lexical shadowing");
 
     /* malformed input must fail cleanly and deterministically */
     analyze("fn broken(x: i32 -> i32 {");
     assert(error_count > 0);
+    destroy_state();
 }

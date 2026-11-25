@@ -1,0 +1,10 @@
+# Cloudflare Worker that serves the stable distribution entry.
+# Deploy: `npx wrangler@4 deploy` from this directory (see README.zh.md).
+name = "ringecho-dist"
+main = "worker.mjs"
+compatibility_date = "2026-11-24"
+workers_dev = false
+
+routes = [
+  { pattern = "ringecho-lang.org/dist/*", zone_name = "ringecho-lang.org" }
+]

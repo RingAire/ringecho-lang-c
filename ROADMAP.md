@@ -1,6 +1,6 @@
 # 特性路线图（宿主集成所需）
 
-本文汇总在把 RingEcho 用作 **宿主语言**（例如 [Reverie](https://github.com/RingAire01/Reverie)，
+本文汇总在把 RingEcho 用作 **宿主语言**（例如 [Reverie](https://github.com/RingAire/reverie)，
 一套类 Tauri 的 `.reo` 桌面运行时）时暴露出的工具链与语言缺口。既有的
 [NATIVE.md](NATIVE.md)、[TYPE_SYSTEM.md](TYPE_SYSTEM.md) 分别跟踪原生子集与
 类型/布局迁移；本文只记录这些文档尚未覆盖、但阻塞宿主集成的能力。

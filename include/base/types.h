@@ -22,6 +22,10 @@ typedef struct Re0Type {
      * (xcalloc/xmalloc/strdup) and must be released by re0_type_free;
      * owned=false means arena-allocated and freed with the arena. */
     bool owned;
+    /* Qualifier on a pointer target: `*volatile T` / `*mut volatile T` /
+     * `*const volatile T`. Part of type identity; implicit conversion may
+     * add this qualifier at the outermost pointer level, but never drop it. */
+    bool is_volatile;
     union {
         struct { struct Re0Type *inner; size_t size; } array;
         struct { struct Re0Type *inner; } slice;
@@ -87,5 +91,9 @@ bool        re0_type_equal(const Re0Type *a, const Re0Type *b);
  * Currently: equal, or numeric implicit conversion.
  */
 bool        re0_type_coercible(const Re0Type *from, const Re0Type *to);
+/* Cross-compilation must use the target, not the compiler host, for usize /
+ * isize widening and integer-to-float precision checks. NULL means host. */
+bool        re0_type_coercible_on(const Re0TargetLayout *target,
+                                const Re0Type *from, const Re0Type *to);
 
 #endif

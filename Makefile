@@ -60,7 +60,6 @@ BUILD_DIR := target/$(CONFIG)
 OBJECT_DIR := $(BUILD_DIR)/obj
 TARGET_REV := $(BUILD_DIR)/rev$(PLATFORM_SUFFIX)
 TARGET_REM := $(BUILD_DIR)/rem$(PLATFORM_SUFFIX)
-TARGET_RVM := $(BUILD_DIR)/rvm$(PLATFORM_SUFFIX)
 
 ifeq ($(CONFIG),Release)
     CFLAGS_PROFILE := -O3 -DNDEBUG
@@ -85,14 +84,20 @@ EXTRA := src/extra
 # ── source files grouped by module ──
 BASE_SRCS := $(BASE)/arena.c $(BASE)/buffer.c $(BASE)/error.c $(BASE)/re0_log.c $(BASE)/safe.c $(BASE)/span.c $(BASE)/types.c $(BASE)/numeric.c $(BASE)/target.c $(BASE)/abi.c
 FRONT_SRCS := $(FRONT)/lexer.c $(FRONT)/token.c $(FRONT)/parser.c $(FRONT)/ast.c $(FRONT)/stream.c
+FRONT_SRCS += $(FRONT)/declaration_attributes.c
 ANALYSIS_SRCS := $(ANALYSIS)/sema.c $(ANALYSIS)/scope.c $(ANALYSIS)/model.c $(ANALYSIS)/builtins.c $(ANALYSIS)/lint.c
-BACKEND_SRCS := $(BACKEND)/codegen.c $(BACKEND)/backend_c.c $(BACKEND)/backend_c_type.c $(BACKEND)/backend_c_generic.c $(BACKEND)/backend_c_expr.c $(BACKEND)/backend_c_stmt.c $(BACKEND)/backend_reo.c $(BACKEND)/runtime_c.c $(BACKEND)/runtime_conversion.c $(BACKEND)/backend_c_cast.c
+BACKEND_SRCS := $(BACKEND)/codegen.c $(BACKEND)/backend_c.c $(BACKEND)/backend_c_type.c $(BACKEND)/backend_c_generic.c $(BACKEND)/backend_c_expr.c $(BACKEND)/backend_c_stmt.c $(BACKEND)/backend_reo.c $(BACKEND)/runtime_c.c $(BACKEND)/runtime_conversion.c $(BACKEND)/kernel_profile.c $(BACKEND)/backend_c_cast.c
 LSP_DIR := src/lsp
 BACKEND_SRCS += $(BACKEND)/native.c $(BACKEND)/native_lower.c $(BACKEND)/native_target.c
 BACKEND_SRCS += $(BACKEND)/native_x64.c $(BACKEND)/native_x86.c $(BACKEND)/native_a64.c $(BACKEND)/native_arm.c $(BACKEND)/native_elf.c $(BACKEND)/native_elf32.c $(BACKEND)/native_macho.c $(BACKEND)/native_coff.c
 ANALYSIS_SRCS += $(ANALYSIS)/layout.c
 BACKEND_SRCS += $(BACKEND)/native_x64_float.c
 BACKEND_SRCS += $(BACKEND)/c_storage.c $(BACKEND)/c_sequence.c
+BACKEND_SRCS += $(BACKEND)/kernel_arithmetic.c
+BACKEND_SRCS += $(BACKEND)/c_declaration.c
+BACKEND_SRCS += $(BACKEND)/kernel_runtime.c
+BACKEND_SRCS += $(BACKEND)/c_atomic.c
+ANALYSIS_SRCS += $(ANALYSIS)/atomic.c
 LSP_SRCS := $(LSP_DIR)/lsp_json.c $(LSP_DIR)/lsp_server.c
 EXTRA_SRCS := $(EXTRA)/re0_event.c $(EXTRA)/re0_manager.c
 
@@ -110,7 +115,7 @@ GC_SRCS := \
 
 # ── 共享库对象文件（不含 main，三个二进制共用） ──
 LIB_SRCS := $(BASE_SRCS) $(FRONT_SRCS) $(ANALYSIS_SRCS) $(BACKEND_SRCS) \
-            $(EXEC)/compiler.c $(EXEC)/build.c $(EXEC)/process.c $(EXEC)/native_build.c $(EXEC)/workspace.c \
+            $(EXEC)/compiler.c $(EXEC)/build.c $(EXEC)/kernel_build.c $(EXEC)/process.c $(EXEC)/native_build.c $(EXEC)/workspace.c \
             $(EXEC)/venv.c $(EXEC)/toml_config.c \
             $(LSP_SRCS) $(EXTRA_SRCS) $(GC_SRCS)
 LIB_OBJS := $(patsubst %.c,$(OBJECT_DIR)/%.o,$(LIB_SRCS))
@@ -118,27 +123,25 @@ LIB_OBJS := $(patsubst %.c,$(OBJECT_DIR)/%.o,$(LIB_SRCS))
 # ── 各 main 的对象文件 ──
 REV_MAIN_OBJ := $(OBJECT_DIR)/$(EXEC)/rev_main.o
 REM_MAIN_OBJ := $(OBJECT_DIR)/$(EXEC)/rem_main.o
-RVM_MAIN_OBJ := $(OBJECT_DIR)/$(EXEC)/rvm_main.o
 
 CHECK_FAILURE_TESTS := $(filter-out tests/invalid_array_oob.reo,$(wildcard tests/invalid_*.reo)) tests/sema_error.reo
 RUNTIME_FAILURE_TESTS := tests/divzero.reo tests/invalid_array_oob.reo tests/stack_overflow.reo
 POSITIVE_TESTS := $(filter-out $(CHECK_FAILURE_TESTS) $(RUNTIME_FAILURE_TESTS),$(wildcard tests/*.reo tests/stdlib/*.reo))
 
 .DEFAULT_GOAL := rev
-.PHONY: test-conversion all build rev rem rvm release debug alpha test test-one check-one test-list clean clean-temp platform-info bigint test-bigint
+.PHONY: test-conversion all build rev rem release debug alpha test test-one check-one test-list clean clean-temp platform-info bigint test-bigint
 
 all: release
 
 platform-info:
-	@printf 'platform=%s compiler=%s targets=rev+rem+rvm\n' "$(PLATFORM)" "$(CC)"
+	@printf 'platform=%s compiler=%s targets=rev+rem\n' "$(PLATFORM)" "$(CC)"
 
 # ── 单独编译目标（避免一次性编译全部）──
 rev: $(TARGET_REV)
 rem: $(TARGET_REM)
-rvm: $(TARGET_RVM)
 
 # ── 全部编译（显式调用）──
-build: $(TARGET_REV) $(TARGET_REM) $(TARGET_RVM)
+build: $(TARGET_REV) $(TARGET_REM)
 
 release:
 	$(MAKE) CONFIG=Release build
@@ -156,11 +159,6 @@ $(TARGET_REV): $(LIB_OBJS) $(REV_MAIN_OBJ)
 
 # rem: 包管理器（轻量，只需 venv/toml）
 $(TARGET_REM): $(OBJECT_DIR)/$(EXEC)/venv.o $(OBJECT_DIR)/$(EXEC)/toml_config.o $(OBJECT_DIR)/$(BASE)/re0_log.o $(REM_MAIN_OBJ)
-	@mkdir -p "$(dir $@)"
-	$(CC) $(CFLAGS) -o "$@" $^ $(LDFLAGS)
-
-# rvm: 版本管理器（最轻量，纯文件操作）
-$(TARGET_RVM): $(RVM_MAIN_OBJ)
 	@mkdir -p "$(dir $@)"
 	$(CC) $(CFLAGS) -o "$@" $^ $(LDFLAGS)
 
@@ -215,9 +213,9 @@ clean-temp:
 
 clean:
 	rm -rf target
-	rm -f rev rev.exe rem rem.exe rvm rvm.exe re0_output.c re0_tmp_out output.reo.asm a.out a.exe
+	rm -f rev rev.exe rem rem.exe re0_output.c re0_tmp_out output.reo.asm a.out a.exe
 
--include $(LIB_OBJS:.o=.d) $(REV_MAIN_OBJ:.o=.d) $(REM_MAIN_OBJ:.o=.d) $(RVM_MAIN_OBJ:.o=.d)
+-include $(LIB_OBJS:.o=.d) $(REV_MAIN_OBJ:.o=.d) $(REM_MAIN_OBJ:.o=.d)
 
 PYTHON ?= python3
 .PHONY: test-match
@@ -242,24 +240,74 @@ test-native-macos: $(TARGET_REV)
 	REO_TEST_COMPILER="$(abspath $(TARGET_REV))" $(PYTHON) -m unittest discover -s tests/native -p "test_native_macos.py"
 
 .PHONY: test-native-unit
+.PHONY: test-type-qualifiers
+.PHONY: test-kernel-target
+.PHONY: test-kernel-semantics
+.PHONY: test-kernel-arithmetic
+.PHONY: test-declaration-attributes
+.PHONY: test-kernel-runtime
+.PHONY: test-kernel-layout
+.PHONY: test-atomic
+.PHONY: test-kernel-build
+.PHONY: test-kernel-modules
+.PHONY: test-union
+.PHONY: test-kernel-registers
+test-kernel-registers: $(TARGET_REV)
+	REO_TEST_COMPILER="$(abspath $(TARGET_REV))" $(PYTHON) -m unittest discover -s tests/ffi -p "test_kernel_registers.py"
+
+test-union: $(TARGET_REV)
+	REO_TEST_COMPILER="$(abspath $(TARGET_REV))" $(PYTHON) -m unittest discover -s tests/ffi -p "test_union.py"
+
+test-kernel-modules: $(TARGET_REV)
+	REO_TEST_COMPILER="$(abspath $(TARGET_REV))" $(PYTHON) -m unittest discover -s tests/ffi -p "test_kernel_modules.py"
+
+test-kernel-build: $(TARGET_REV)
+	REO_TEST_COMPILER="$(abspath $(TARGET_REV))" $(PYTHON) -m unittest discover -s tests/ffi -p "test_kernel_build.py"
+
+test-atomic: $(TARGET_REV)
+	REO_TEST_COMPILER="$(abspath $(TARGET_REV))" $(PYTHON) -m unittest discover -s tests/ffi -p "test_atomic.py"
+
+test-kernel-layout: $(TARGET_REV)
+	REO_TEST_COMPILER="$(abspath $(TARGET_REV))" $(PYTHON) -m unittest discover -s tests/ffi -p "test_kernel_layout.py"
+
+test-kernel-runtime: $(TARGET_REV)
+	REO_TEST_COMPILER="$(abspath $(TARGET_REV))" $(PYTHON) -m unittest discover -s tests/ffi -p "test_kernel_runtime.py"
+
+test-declaration-attributes: $(TARGET_REV)
+	REO_TEST_COMPILER="$(abspath $(TARGET_REV))" $(PYTHON) -m unittest discover -s tests/ffi -p "test_declaration_attributes.py"
+
+test-kernel-arithmetic: $(TARGET_REV)
+	REO_TEST_COMPILER="$(abspath $(TARGET_REV))" $(PYTHON) -m unittest discover -s tests/ffi -p "test_kernel_arithmetic.py"
+
+test-kernel-semantics: $(TARGET_REV)
+	REO_TEST_COMPILER="$(abspath $(TARGET_REV))" $(PYTHON) -m unittest discover -s tests/ffi -p "test_kernel_semantics.py"
+
+test-kernel-target: $(LIB_OBJS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/native/kernel_target_unit.c $(LIB_OBJS) $(LDFLAGS) -o "$(BUILD_DIR)/kernel-target-unit$(PLATFORM_SUFFIX)"
+	exec "./$(BUILD_DIR)/kernel-target-unit$(PLATFORM_SUFFIX)"
+
+test-type-qualifiers: $(LIB_OBJS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/native/type_qualifiers_unit.c $(LIB_OBJS) $(LDFLAGS) -o "$(BUILD_DIR)/type-qualifiers-unit$(PLATFORM_SUFFIX)"
+	exec "./$(BUILD_DIR)/type-qualifiers-unit$(PLATFORM_SUFFIX)"
+
 .PHONY: test-layout
 .PHONY: test-layout-faults
 .PHONY: test-c-storage-faults
 test-c-storage-faults: $(LIB_OBJS)
-	$(CC) $(CPPFLAGS) $(CFLAGS) tests/native/c_storage_faults.c $(LIB_OBJS) -Wl,--wrap=realloc,--wrap=calloc,--wrap=strdup $(LDFLAGS) -o "$(BUILD_DIR)/c-storage-faults"
-	"$(BUILD_DIR)/c-storage-faults"
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/native/c_storage_faults.c $(LIB_OBJS) -Wl,--wrap=realloc,--wrap=calloc,--wrap=strdup $(LDFLAGS) -o "$(BUILD_DIR)/c-storage-faults$(PLATFORM_SUFFIX)"
+	exec "./$(BUILD_DIR)/c-storage-faults$(PLATFORM_SUFFIX)"
 
 test-layout-faults: $(LIB_OBJS)
-	$(CC) $(CPPFLAGS) $(CFLAGS) tests/native/layout_faults.c $(LIB_OBJS) -Wl,--wrap=realloc,--wrap=calloc,--wrap=strdup $(LDFLAGS) -o "$(BUILD_DIR)/layout-faults"
-	"$(BUILD_DIR)/layout-faults"
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/native/layout_faults.c $(LIB_OBJS) -Wl,--wrap=realloc,--wrap=calloc,--wrap=strdup $(LDFLAGS) -o "$(BUILD_DIR)/layout-faults$(PLATFORM_SUFFIX)"
+	exec "./$(BUILD_DIR)/layout-faults$(PLATFORM_SUFFIX)"
 
 test-layout: $(LIB_OBJS)
-	$(CC) $(CPPFLAGS) $(CFLAGS) tests/native/layout_unit.c $(LIB_OBJS) $(LDFLAGS) -o "$(BUILD_DIR)/layout-unit"
-	"$(BUILD_DIR)/layout-unit"
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/native/layout_unit.c $(LIB_OBJS) $(LDFLAGS) -o "$(BUILD_DIR)/layout-unit$(PLATFORM_SUFFIX)"
+	exec "./$(BUILD_DIR)/layout-unit$(PLATFORM_SUFFIX)"
 
 test-native-unit: $(LIB_OBJS)
-	$(CC) $(CPPFLAGS) $(CFLAGS) tests/native/native_unit.c $(LIB_OBJS) -Wl,--wrap=realloc $(LDFLAGS) -o "$(BUILD_DIR)/native-unit"
-	"$(BUILD_DIR)/native-unit"
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/native/native_unit.c $(LIB_OBJS) -Wl,--wrap=realloc $(LDFLAGS) -o "$(BUILD_DIR)/native-unit$(PLATFORM_SUFFIX)"
+	exec "./$(BUILD_DIR)/native-unit$(PLATFORM_SUFFIX)"
 
 test-match: $(TARGET_REV)
 	REO_TEST_COMPILER="$(abspath $(TARGET_REV))" $(PYTHON) -m unittest discover -s tests/match -p "test_*.py"
@@ -290,3 +338,7 @@ test-selfhost: $(TARGET_REV)
 	"./$(TARGET_REV)" run compiler-reo/parser.reo
 	"./$(TARGET_REV)" run compiler-reo/expr.reo
 	"./$(TARGET_REV)" run compiler-reo/frontend.reo
+
+.PHONY: test-selfhost-types
+test-selfhost-types: $(TARGET_REV)
+	REO_TEST_COMPILER="$(abspath $(TARGET_REV))" $(PYTHON) -m unittest discover -s tests/selfhost -p "test_*.py"

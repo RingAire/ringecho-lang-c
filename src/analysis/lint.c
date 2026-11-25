@@ -79,6 +79,15 @@ static void lint_expr(Re0Expr *e) {
             break;
         case EXPR_SELECT: lint_expr(e->select.object); break;
         case EXPR_INDEX: lint_expr(e->index.target); lint_expr(e->index.index); break;
+        case EXPR_CAST: lint_expr(e->cast.inner); break;
+        case EXPR_TRY: lint_expr(e->try_.inner); break;
+        case EXPR_TUPLE:
+            for (int i = 0; i < e->tuple.count; i++) lint_expr(e->tuple.elems[i]);
+            break;
+        case EXPR_STRUCT_INIT:
+            for (int i = 0; i < e->struct_init.field_count; i++)
+                lint_expr(e->struct_init.fields[i].value);
+            break;
         case EXPR_IF:
             lint_expr(e->if_expr.cond);
             lint_expr(e->if_expr.then);

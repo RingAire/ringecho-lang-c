@@ -1,5 +1,6 @@
 #ifndef RE0_ANALYSIS_INIT_H
 #define RE0_ANALYSIS_INIT_H
+#include "analysis/atomic.h"
 
 #include "analysis/scope.h"
 #include "analysis/model.h"

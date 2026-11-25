@@ -40,3 +40,6 @@ __pycache__/
 # qemu/crash artifacts
 *.core
 core.*
+
+# Review scratch
+.review.diff

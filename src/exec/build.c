@@ -42,16 +42,39 @@ static bool ensure_temp_directory(Re0Build *b) {
 #if defined(RE0_PLATFORM_WINDOWS)
     char root[MAX_PATH];
     DWORD length = GetTempPathA(sizeof(root), root);
-    if (!length || length >= sizeof(root)) goto failed;
-    if (!GetTempFileNameA(root, "reo", 0, b->temp_dir)) goto failed;
-    if (!DeleteFileA(b->temp_dir) || !CreateDirectoryA(b->temp_dir, NULL)) goto failed;
+    if (!length || length >= (DWORD)sizeof(root)) {
+        re0_error_append(b->errors, RE0_ERR_IO, RE0_SPAN_ZERO, NULL,
+                         "cannot resolve the system temporary directory (error %lu)",
+                         (unsigned long)GetLastError());
+        b->temp_dir[0] = 0;
+        return false;
+    }
+    /* Create a unique private directory directly. `GetTempFileNameA` is avoided
+     * because it (a) creates a stray file on every call and (b) fails outright
+     * once a stale name exists, which accumulates across interrupted runs. */
+    for (unsigned attempt = 0; attempt < 64; attempt++) {
+        uint_fast64_t serial = atomic_fetch_add_explicit(&re0_temp_counter, 1,
+                                                          memory_order_relaxed);
+        struct timespec now = {0};
+        if (timespec_get(&now, TIME_UTC) != TIME_UTC) now.tv_sec = time(NULL);
+        int written = snprintf(b->temp_dir, sizeof(b->temp_dir), "%sreo_%lu_%lld_%llu",
+                               root, RE0_PROCESS_ID(), (long long)now.tv_nsec,
+                               (unsigned long long)serial);
+        if (written < 0 || (size_t)written >= sizeof(b->temp_dir)) break;
+        if (CreateDirectoryA(b->temp_dir, NULL)) return true;
+        if (GetLastError() != ERROR_ALREADY_EXISTS) {
+            re0_error_append(b->errors, RE0_ERR_IO, RE0_SPAN_ZERO, NULL,
+                             "cannot create a private temporary build directory "
+                             "'%s' (error %lu)", b->temp_dir, (unsigned long)GetLastError());
+            b->temp_dir[0] = 0;
+            return false;
+        }
+    }
 #else
     /* mkdtemp atomically creates a private directory under the system temp root. */
     snprintf(b->temp_dir, sizeof(b->temp_dir), "/tmp/ringecho-XXXXXX");
-    if (!mkdtemp(b->temp_dir)) goto failed;
+    if (mkdtemp(b->temp_dir)) return true;
 #endif
-    return true;
-failed:
     b->temp_dir[0] = 0;
     re0_error_append(b->errors, RE0_ERR_IO, RE0_SPAN_ZERO, NULL,
                      "cannot create a private temporary build directory");
@@ -98,6 +121,7 @@ void re0_build_init(Re0Build *b, Re0ErrorList *errors) {
         re0_error_append(errors, RE0_WARN, RE0_SPAN_ZERO, NULL,
                          "invalid REO_KEEP_C; using default 1");
     b->shared = false;
+    re0_kernel_build_init(&b->kernel);
 }
 
 bool re0_build_write_source(Re0Build *b, const char *c_code) {

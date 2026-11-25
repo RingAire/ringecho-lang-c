@@ -35,7 +35,7 @@
 | Linux | x86 | ubuntu-24.04，gcc -m32 | `.deb` |
 | Linux | ARM64 | ubuntu-24.04-arm | `.deb` |
 
-每个包包含 `rev`、`rem`、`rvm`、使用说明、许可证和构建清单；另附 Windows `.zip` / Unix `.tar.gz` 便携包及 `SHA256SUMS`。Windows 安装程序在 windows-2025 上生成，x64/x86 安装测试在 windows-2025 上运行，ARM64 安装测试在 windows-11-arm 上运行。
+每个包包含 `rev`、`rem`、使用说明、许可证和构建清单（`rvm` 独立发布，不在包内）；另附 Windows `.zip` / Unix `.tar.gz` 便携包及 `SHA256SUMS`。Windows 安装程序在 windows-2025 上生成，x64/x86 安装测试在 windows-2025 上运行，ARM64 安装测试在 windows-11-arm 上运行。
 
 触发方式：main 推送、面向 main 的 PR、`v*` 标签或手动 `workflow_dispatch`。产物在 Actions 对应运行的 Artifacts 中保留 30 天。标签版本使用标签名去掉 v；其他构建使用 `0.0.0-dev.<运行编号>.<提交短哈希>`。未自动创建或发布 GitHub Release，也未自动提交代码。
 
@@ -55,6 +55,24 @@ python3 scripts/ci/package.py --platform linux --arch x64 \
 
 输出位于 `target/packages/`。安装步骤、依赖、未签名包及功能边界见 [安装说明](packaging/INSTALL.zh.md)。本地验证不能代替尚未运行的 macOS/Windows Runner 结果。
 
+## 分发站点
+
+`rvm`（独立仓库）的下载地址不绑定 GitHub 仓库名，而是项目站点：
+
+```
+https://ringecho-lang.org/dist/index.txt                              每行一个版本
+https://ringecho-lang.org/dist/v<版本>/ringecho-<版本>-<平台>-<架构>.zip      Windows
+https://ringecho-lang.org/dist/v<版本>/ringecho-<版本>-<平台>-<架构>.tar.gz   Linux / macOS
+https://ringecho-lang.org/dist/v<版本>/SHA256SUMS                     完整性清单（待接入 rvm 校验）
+```
+
+- 站点是主源；未部署或不可达时 `rvm install` 回退到 GitHub Releases 的同一相对路径
+  （`/releases/download/v<版本>/<资产>`），因此站点上线不需要改 rvm。
+- `RVM_DIST_BASE` 可覆盖站点地址（镜像、本地测试）；显式覆盖后不再回退。
+- 站点内容应与 release 资产逐字节一致；CI 目前只上传 GitHub Release，站点同步
+  需要额外的发布步骤（R2/Pages 或反向代理三选一）。
+- 仓库名与组织名只出现在回退地址中；主地址与仓库迁移解耦。
+
 ## 目标平台
 
 | 平台 | 状态 |
@@ -73,7 +91,6 @@ python3 scripts/ci/package.py --platform linux --arch x64 \
 ```
 target/<Release|Debug|Alpha>/rev[.exe]   编译器（含 LSP）
 target/<Release|Debug|Alpha>/rem[.exe]   包管理器
-target/<Release|Debug|Alpha>/rvm[.exe]   版本管理器
 target/<Release|Debug|Alpha>/obj/...     中间对象文件
 target/Temp/                             生成的临时 C 文件
 ```
